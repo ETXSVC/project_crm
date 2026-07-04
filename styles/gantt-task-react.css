@@ -1,0 +1,350 @@
+/* @wamra/gantt-task-react v0.6.17 – styles missing from published package.
+   Uses attribute selectors so hashed class suffixes still match. */
+
+[class*="_ganttTableRoot_"] {
+  display: flex;
+  position: relative;
+  border-left: #e6e4e4 1px solid;
+  overflow: hidden;
+}
+
+[class*="_ganttTableWrapper_"] {
+  display: grid;
+  overflow: hidden;
+  grid-template-rows: min-content;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+[class*="_ganttTableWrapper_"]::-webkit-scrollbar {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+[class*="_ganttTableWrapper_"]::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+[class*="_ganttTableWrapper_"]::-webkit-scrollbar-thumb {
+  border: 6px solid transparent;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  background-clip: padding-box;
+}
+
+[class*="_taskListResizer_"] {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  height: 100%;
+  width: 10px;
+  cursor: ew-resize;
+  user-select: none;
+}
+
+[class*="_taskListResizer_"]:hover {
+  background-color: grey;
+}
+
+[class*="_taskListResizer_"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 4px;
+  height: 100%;
+  width: 2px;
+  background-color: #e5e5e5;
+}
+
+[class*="_taskListContent_"] {
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+}
+
+[class*="_taskListContent_"]::-webkit-scrollbar {
+  display: none;
+}
+
+[class*="_hidden_"][class*="_v4xjz_"] {
+  display: none;
+}
+
+[class*="_ganttTable_Header_"] {
+  display: table;
+  border-bottom: #e6e4e4 3px solid;
+  border-top: #e6e4e4 3px solid;
+  box-sizing: content-box;
+}
+
+[class*="_ganttTable_HeaderSeparator_"] {
+  border-right: 1px solid rgb(196, 196, 196);
+  opacity: 1;
+  margin-left: -2px;
+}
+
+[class*="_ganttTable_HeaderContent_"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+[class*="_ganttTable_HeaderItem_"] {
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-left: 5px;
+  padding-right: 5px;
+  display: table-cell;
+  vertical-align: middle;
+}
+
+[class*="_ganttTable_HeaderItem_"] [class*="_resizer_"] {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  height: 100%;
+  width: 10px;
+  cursor: ew-resize;
+  user-select: none;
+}
+
+[class*="_ganttTable_HeaderItem_"]:last-child [class*="_resizer_"] {
+  width: 5px;
+  right: 5px;
+}
+
+[class*="_taskListWrapper_"] {
+  display: table;
+}
+
+[class*="_taskListTableRow_"] {
+  position: relative;
+  display: table-row;
+  text-overflow: ellipsis;
+  cursor: grab;
+}
+
+[class*="_taskListTableRowGrabbing_"] {
+  cursor: grabbing;
+}
+
+[class*="_cut_"][class*="_w35p0_"] {
+  opacity: 0.3;
+}
+
+[class*="_taskListCell_"] {
+  box-sizing: border-box;
+  display: table-cell;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 5px;
+}
+
+[class*="_taskListCellInner_"] {
+  display: flex;
+  align-items: center;
+}
+
+[class*="_dropAfter_"],
+[class*="_dropBefore_"] {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 8px;
+  color: transparent;
+}
+
+[class*="_dropBefore_"] {
+  top: 0;
+}
+
+[class*="_dropAfter_"] {
+  bottom: 0;
+}
+
+[class*="_taskListNameWrapper_"] {
+  display: flex;
+  align-items: center;
+}
+
+[class*="_taskListExpander_"] {
+  opacity: 0.9;
+  font-size: 18px;
+  user-select: none;
+  cursor: pointer;
+  display: flex;
+}
+
+[class*="_taskName_"] {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+[class*="_button_"][class*="_ts3e8_"],
+[class*="_button_"][class*="_5sg45_"],
+[class*="_button_"][class*="_ts3e8_"] {
+  margin: 0;
+  padding: 5px;
+  border: none;
+  outline: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+[class*="_wrapper_"][class*="_1sr1d_"] {
+  display: grid;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  outline: none;
+  position: relative;
+}
+
+[class*="_ganttTaskRoot_"] {
+  display: flex;
+  flex-direction: column;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  font-size: 0;
+  margin: 0;
+  padding: 0;
+}
+
+[class*="_ganttTaskContent_"] {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+[class*="_calendarMain_"] {
+  border-top: #e6e4e4 3px solid;
+  border-bottom: #e6e4e4 3px solid;
+  box-sizing: content-box;
+}
+
+[class*="_calendarBottomText_"] {
+  text-anchor: middle;
+  fill: #333;
+  user-select: none;
+  pointer-events: none;
+}
+
+[class*="_calendarTopTick_"] {
+  stroke: #e6e4e4;
+}
+
+[class*="_calendarTopText_"] {
+  text-anchor: middle;
+  fill: #555;
+  user-select: none;
+  pointer-events: none;
+}
+
+[class*="_calendarHeader_"] {
+  fill: #ffffff;
+  stroke: #e0e0e0;
+  stroke-width: 1.4;
+}
+
+[class*="_barWrapper_"] {
+  cursor: pointer;
+  outline: none;
+}
+
+[class*="_barWrapper_"]:hover [class*="_barHandle_"] {
+  visibility: visible;
+  opacity: 1;
+}
+
+[class*="_barHandle_"] {
+  fill: #ddd;
+  cursor: ew-resize;
+  opacity: 0;
+  visibility: hidden;
+}
+
+[class*="_barHandle_"]:hover {
+  fill: #a2a2a2;
+}
+
+[class*="_barBackground_"] {
+  user-select: none;
+  stroke-width: 0;
+}
+
+[class*="_projectWrapper_"],
+[class*="_milestoneWrapper_"] {
+  cursor: pointer;
+  outline: none;
+}
+
+[class*="_projectBackground_"] {
+  user-select: none;
+  opacity: 0.6;
+}
+
+[class*="_milestoneBackground_"] {
+  user-select: none;
+}
+
+[class*="_barRelationHandleWrapper_"]:hover [class*="_barRelationHandle_"],
+[class*="_barRelationHandle_"][class*="_barRelationHandle_drawMode_"] {
+  opacity: 1;
+}
+
+[class*="_barRelationHandle_"] {
+  fill: #ddd;
+  stroke: #333;
+  cursor: pointer;
+  opacity: 0;
+}
+
+[class*="_relationLine_"] {
+  stroke: grey;
+  stroke-width: 2;
+  stroke-dasharray: 4;
+}
+
+[class*="_barLabel_"] {
+  fill: #fff;
+  font-size: 12px;
+  user-select: none;
+  pointer-events: none;
+}
+
+[class*="_tooltipDefaultContainer_"] {
+  background: #fff;
+  padding: 12px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+}
+
+[class*="_tooltipDetailsContainer_"] {
+  position: absolute;
+  display: flex;
+  flex-shrink: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+[class*="_menuOption_"] {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #fff;
+  cursor: pointer;
+  padding: 5px;
+}
+
+[class*="_menuOption_"]:hover {
+  background-color: #eeeeee;
+}

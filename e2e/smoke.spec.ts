@@ -1,0 +1,37 @@
+import { test, expect } from "@playwright/test";
+
+test.describe("Auth", () => {
+  test("login page loads", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  });
+
+  test("signup page loads", async ({ page }) => {
+    await page.goto("/signup");
+    await expect(page.getByRole("heading", { name: "Create your workspace" })).toBeVisible();
+  });
+});
+
+test.describe("Authenticated", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill("demo@example.com");
+    await page.getByLabel("Password").fill("password");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL("/dashboard");
+  });
+
+  test("dashboard loads", async ({ page }) => {
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  });
+
+  test("projects page loads", async ({ page }) => {
+    await page.goto("/projects");
+    await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
+  });
+
+  test("CRM pipeline loads", async ({ page }) => {
+    await page.goto("/crm/opportunities");
+    await expect(page.getByRole("heading", { name: "Opportunities" })).toBeVisible();
+  });
+});

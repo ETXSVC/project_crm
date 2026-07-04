@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: proj
+      POSTGRES_PASSWORD: proj
+      POSTGRES_DB: projtest
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proj -d projtest"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - projnet
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - projnet
+
+  mailhog:
+    image: mailhog/mailhog
+    profiles: ["dev"]
+    ports:
+      - "8025:8025"
+    networks:
+      - projnet
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    profiles: ["dev"]
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://proj:proj@postgres:5432/projtest
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ${AUTH_SECRET:-dev-secret-change-in-production-32chars}
+      NEXTAUTH_URL: http://localhost:3001
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      UPLOAD_DIR: /data/uploads
+      NODE_ENV: development
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      # Keep dev build cache inside the container so host `next build` doesn't break dev assets
+      - /app/.next
+      - uploads_data:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - projnet
+
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["prod"]
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://proj:proj@postgres:5432/projtest
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NODE_ENV: production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    volumes:
+      - uploads_data:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - projnet
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+
+networks:
+  projnet:
+    driver: bridge
