@@ -23,6 +23,7 @@ test:
 
 system-test:
 	curl.exe -sf http://localhost:3001/api/health
+	docker compose --profile dev exec -T app pnpm lint
 	docker compose --profile dev exec -T app ./node_modules/.bin/vitest run
 	docker compose --profile dev exec -T app ./node_modules/.bin/tsx scripts/run-e2e.ts
 

@@ -20,7 +20,7 @@ async function syncSubscription(subscription: Stripe.Subscription) {
     ? new Date(subscription.current_period_end * 1000)
     : null;
 
-  let tenant =
+  const tenant =
     (tenantId ? await prisma.tenant.findUnique({ where: { id: tenantId } }) : null) ??
     (await findTenantByStripeSubscriptionId(subscription.id)) ??
     (await findTenantByStripeCustomerId(customerId));

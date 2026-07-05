@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { getPhase } from "./phases";
+import { verifyCiWorkflow } from "./verify-ci";
 
 export type SystemTestResult = {
   phase: number;
@@ -33,6 +34,19 @@ export function checkHealth(appUrl: string) {
   return body;
 }
 
+export function runLint() {
+  console.log("\n--- Lint ---\n");
+  run("docker compose --profile dev exec -T app pnpm lint");
+}
+
+export function verifyCiConfig(phaseId: number) {
+  if (phaseId !== 5) return;
+
+  console.log("\n--- CI workflow verification ---\n");
+  const result = verifyCiWorkflow();
+  console.log(`CI workflow verified (${result.checks} checks): ${result.workflowPath}`);
+}
+
 export function runUnitTests() {
   console.log("\n--- Unit & integration tests ---\n");
   run("docker compose --profile dev exec -T app ./node_modules/.bin/vitest run");
@@ -56,7 +70,9 @@ export function runSystemTest(phaseId: number, appUrl = process.env.APP_URL ?? "
 
   run("docker compose --profile dev ps");
 
+  verifyCiConfig(phaseId);
   const health = checkHealth(appUrl);
+  runLint();
   runUnitTests();
   runE2eTests();
 

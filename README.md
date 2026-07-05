@@ -103,7 +103,24 @@ pnpm phase:status
 | 4 | Stripe billing |
 | 5 | CI/CD |
 
-`phase:gate` runs the same checks as `test:system` and records pass/fail in `.phase-status.json`. Phase N+1 is blocked until Phase N gate passes.
+`phase:gate` runs the same checks as `test:system` and records pass/fail in `.phase-status.json`. Phase N+1 is blocked until Phase N gate passes. Phase 5 also verifies `.github/workflows/ci.yml` and runs lint before unit/E2E tests.
+
+### CI (GitHub Actions)
+
+Every push to `main` and every pull request runs:
+
+1. Docker stack build + health check
+2. `pnpm lint`
+3. Vitest unit/integration tests
+4. Playwright E2E smoke tests
+
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+
+Validate the workflow locally:
+
+```bash
+pnpm verify:ci
+```
 
 ### System test (dry run, no recording)
 
