@@ -1,8 +1,10 @@
-import { prisma } from "@/lib/db/prisma";
+import { createTenantPrisma } from "@/lib/db/prisma";
 
 export async function fetchCrmPipelineStats(tenantId: string) {
-  const stages = await prisma.pipelineStage.findMany({
-    where: { tenantId },
+  const db = createTenantPrisma(tenantId);
+
+  const stages = await db.pipelineStage.findMany({
+    where: {},
     orderBy: { sortOrder: "asc" },
     include: {
       opportunities: {
@@ -12,8 +14,8 @@ export async function fetchCrmPipelineStats(tenantId: string) {
     },
   });
 
-  const pipelineValue = await prisma.opportunity.aggregate({
-    where: { tenantId, deletedAt: null, status: "OPEN" },
+  const pipelineValue = await db.opportunity.aggregate({
+    where: { deletedAt: null, status: "OPEN" },
     _sum: { value: true },
   });
 
@@ -29,17 +31,19 @@ export async function fetchCrmPipelineStats(tenantId: string) {
 }
 
 export async function fetchCrmStats(tenantId: string) {
+  const db = createTenantPrisma(tenantId);
+
   const [accounts, contacts, leads, opportunities, pipelineValue, stages] = await Promise.all([
-    prisma.crmAccount.count({ where: { tenantId, deletedAt: null } }),
-    prisma.contact.count({ where: { tenantId, deletedAt: null } }),
-    prisma.lead.count({ where: { tenantId, deletedAt: null, status: { not: "CONVERTED" } } }),
-    prisma.opportunity.count({ where: { tenantId, deletedAt: null, status: "OPEN" } }),
-    prisma.opportunity.aggregate({
-      where: { tenantId, deletedAt: null, status: "OPEN" },
+    db.crmAccount.count({ where: { deletedAt: null } }),
+    db.contact.count({ where: { deletedAt: null } }),
+    db.lead.count({ where: { deletedAt: null, status: { not: "CONVERTED" } } }),
+    db.opportunity.count({ where: { deletedAt: null, status: "OPEN" } }),
+    db.opportunity.aggregate({
+      where: { deletedAt: null, status: "OPEN" },
       _sum: { value: true },
     }),
-    prisma.pipelineStage.findMany({
-      where: { tenantId },
+    db.pipelineStage.findMany({
+      where: {},
       orderBy: { sortOrder: "asc" },
       include: {
         opportunities: {
@@ -66,8 +70,9 @@ export async function fetchCrmStats(tenantId: string) {
 }
 
 export async function fetchPipelineStages(tenantId: string) {
-  return prisma.pipelineStage.findMany({
-    where: { tenantId },
+  const db = createTenantPrisma(tenantId);
+  return db.pipelineStage.findMany({
+    where: {},
     orderBy: { sortOrder: "asc" },
   });
 }

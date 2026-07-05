@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { setTenantContext } from "@/lib/db/tenant-context";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -12,31 +13,35 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
+const tenantScopedModels = [
+  "Project",
+  "Task",
+  "TaskDependency",
+  "Milestone",
+  "Resource",
+  "ResourceAssignment",
+  "Baseline",
+  "BaselineTask",
+  "CrmAccount",
+  "Contact",
+  "Lead",
+  "Opportunity",
+  "PipelineStage",
+  "Activity",
+  "AuditLog",
+  "Notification",
+  "ProjectCalendar",
+  "DashboardLayout",
+] as const;
+
 export function createTenantPrisma(tenantId: string) {
   return prisma.$extends({
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
-          const tenantScopedModels = [
-            "Project",
-            "Task",
-            "TaskDependency",
-            "Milestone",
-            "Resource",
-            "ResourceAssignment",
-            "Baseline",
-            "CrmAccount",
-            "Contact",
-            "Lead",
-            "Opportunity",
-            "PipelineStage",
-            "Activity",
-            "AuditLog",
-            "Notification",
-            "ProjectCalendar",
-          ];
+          await setTenantContext(tenantId);
 
-          if (tenantScopedModels.includes(model)) {
+          if (tenantScopedModels.includes(model as (typeof tenantScopedModels)[number])) {
             if (operation === "create" || operation === "createMany") {
               if (operation === "create") {
                 (args as { data: Record<string, unknown> }).data = {

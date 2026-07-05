@@ -1,12 +1,23 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { signIn } from "@/lib/auth";
+import { bootstrapTenant } from "@/lib/auth/bootstrap-tenant";
+import { requireSession } from "@/lib/db/get-tenant-db";
 import { prisma } from "@/lib/db/prisma";
 import { slugify } from "@/lib/utils";
 import { loginSchema, signupSchema } from "@/lib/validations/schemas";
 import { AuthError } from "next-auth";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
+
+const magicLinkSchema = z.object({
+  email: z.string().email(),
+});
+
+const workspaceSchema = z.object({
+  tenantName: z.string().min(2).max(100),
+});
 
 export async function loginAction(formData: FormData) {
   const parsed = loginSchema.safeParse({
@@ -31,6 +42,67 @@ export async function loginAction(formData: FormData) {
     }
     throw error;
   }
+}
+
+export async function magicLinkAction(formData: FormData) {
+  const parsed = magicLinkSchema.safeParse({
+    email: formData.get("email"),
+  });
+
+  if (!parsed.success) {
+    return { error: "Enter a valid email address" };
+  }
+
+  try {
+    await signIn("nodemailer", {
+      email: parsed.data.email,
+      redirectTo: "/dashboard",
+    });
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    if (error instanceof AuthError) {
+      return { error: "Could not send sign-in link" };
+    }
+    throw error;
+  }
+}
+
+export async function createWorkspaceAction(formData: FormData) {
+  const session = await requireSession();
+  const parsed = workspaceSchema.safeParse({
+    tenantName: formData.get("tenantName"),
+  });
+
+  if (!parsed.success) {
+    return { error: "Workspace name must be at least 2 characters" };
+  }
+
+  const existingMembership = await prisma.tenantMembership.findFirst({
+    where: { userId: session.user.id },
+  });
+
+  if (existingMembership) {
+    return { error: "You already belong to a workspace" };
+  }
+
+  let slug = slugify(parsed.data.tenantName);
+  const slugExists = await prisma.tenant.findUnique({ where: { slug } });
+  if (slugExists) slug = `${slug}-${Date.now()}`;
+
+  const tenant = await prisma.$transaction(async (tx) =>
+    bootstrapTenant(tx, {
+      tenantName: parsed.data.tenantName,
+      slug,
+      userId: session.user.id,
+    })
+  );
+
+  return {
+    success: true as const,
+    tenantId: tenant.id,
+    tenantSlug: tenant.slug,
+    role: "OWNER" as const,
+  };
 }
 
 export async function signupAction(formData: FormData) {
@@ -66,42 +138,10 @@ export async function signupAction(formData: FormData) {
       },
     });
 
-    const tenant = await tx.tenant.create({
-      data: {
-        name: parsed.data.tenantName,
-        slug,
-      },
-    });
-
-    await tx.tenantMembership.create({
-      data: {
-        tenantId: tenant.id,
-        userId: user.id,
-        role: "OWNER",
-      },
-    });
-
-    const defaultStages = [
-      { name: "Prospecting", sortOrder: 0, probability: 10 },
-      { name: "Qualification", sortOrder: 1, probability: 25 },
-      { name: "Proposal", sortOrder: 2, probability: 50 },
-      { name: "Negotiation", sortOrder: 3, probability: 75 },
-      { name: "Closed Won", sortOrder: 4, probability: 100 },
-    ];
-
-    for (const stage of defaultStages) {
-      await tx.pipelineStage.create({
-        data: { tenantId: tenant.id, ...stage },
-      });
-    }
-
-    await tx.projectCalendar.create({
-      data: {
-        tenantId: tenant.id,
-        name: "Standard Work Week",
-        workDays: [1, 2, 3, 4, 5],
-        hoursPerDay: 8,
-      },
+    await bootstrapTenant(tx, {
+      tenantName: parsed.data.tenantName,
+      slug,
+      userId: user.id,
     });
   });
 

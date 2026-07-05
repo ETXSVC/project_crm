@@ -1,14 +1,16 @@
 import { auth } from "@/lib/auth";
 import { getSettings } from "@/lib/actions/settings";
+import { getBillingInfo } from "@/lib/actions/billing";
 import { WorkspaceSettingsForm } from "@/components/settings/workspace-settings-form";
 import { PipelineStagesForm } from "@/components/settings/pipeline-stages-form";
 import { CalendarSettingsForm } from "@/components/settings/calendar-settings-form";
+import { BillingSettingsForm } from "@/components/settings/billing-settings-form";
 
 const ADMIN_ROLES = ["OWNER", "ADMIN"];
 
 export default async function SettingsPage() {
   const session = await auth();
-  const tenant = await getSettings();
+  const [tenant, billing] = await Promise.all([getSettings(), getBillingInfo()]);
   const canEdit = ADMIN_ROLES.includes(session?.user.role ?? "");
 
   if (!tenant) {
@@ -55,6 +57,8 @@ export default async function SettingsPage() {
           }))}
           canEdit={canEdit}
         />
+
+        {billing && <BillingSettingsForm billing={billing} canEdit={canEdit} />}
       </div>
     </div>
   );

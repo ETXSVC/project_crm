@@ -4,7 +4,7 @@ A Docker-based SaaS project management platform with CRM, Gantt charts, and a wi
 
 ## Features
 
-- **Multi-tenancy** — Row-level tenant isolation with RBAC roles
+- **Multi-tenancy** — Row-level tenant isolation with PostgreSQL RLS, Prisma tenant extension, and RBAC roles
 - **Project Management** — WBS task hierarchy, dependencies, scheduling engine, critical path, baselines, resources
 - **Gantt Chart** — Interactive drag-and-drop scheduling with zoom levels and critical path highlighting
 - **CRM** — Accounts, contacts, leads, opportunities, pipeline kanban, activity logging
@@ -42,7 +42,8 @@ make logs     # Tail app logs
 make shell    # Shell into app container
 make migrate  # Run Prisma migrations
 make seed     # Seed database
-make test     # Run unit tests
+docker compose --profile dev exec app pnpm test
+docker compose --profile dev exec app ./node_modules/.bin/tsx scripts/run-e2e.ts
 make prod     # Start production stack
 ```
 
@@ -52,9 +53,16 @@ make prod     # Start production stack
 app/          Next.js App Router (pages, API routes)
 components/   UI components (shadcn, Gantt, CRM, dashboard)
 lib/          Auth, DB, scheduling engine, server actions
-prisma/       Database schema and seed
+prisma/       Database schema, migrations (PostgreSQL RLS), seed
 docker/       Entrypoint and wait scripts
 ```
+
+### Tenant isolation (RLS)
+
+- Shared-schema multi-tenancy: tenant-owned rows include `tenantId`
+- PostgreSQL Row Level Security (`20260704220000_enable_rls`) enforces isolation at the database
+- App connects as `proj_app` (RLS enforced); migrations/seeds use `MIGRATION_DATABASE_URL`
+- `getTenantDb()` sets `app.tenant_id` in `lib/db/tenant-context.ts` before tenant queries
 
 ### Docker Services
 
@@ -62,7 +70,7 @@ docker/       Entrypoint and wait scripts
 |---------|---------|
 | `app` | Next.js application |
 | `postgres` | PostgreSQL 16 database |
-| `redis` | Session cache |
+| `redis` | Redis cache for dashboard/CRM aggregates |
 | `mailhog` | Email capture (dev) |
 
 ## Development
@@ -73,8 +81,42 @@ All commands run inside Docker:
 docker compose --profile dev exec app pnpm db:migrate:dev
 docker compose --profile dev exec app pnpm db:seed
 docker compose --profile dev exec app pnpm test
-docker compose --profile dev exec app pnpm test:e2e
 ```
+
+### Phase gate (required before next phase)
+
+Each implementation phase must pass **health + unit + E2E** before you start the next one.
+
+```bash
+# After finishing a phase (Docker stack up on port 3001):
+pnpm phase:gate -- --phase=1
+
+# Check progress:
+pnpm phase:status
+```
+
+| Phase | Focus |
+|-------|--------|
+| 1 | PostgreSQL RLS |
+| 2 | Tenant query hardening |
+| 3 | Production auth |
+| 4 | Stripe billing |
+| 5 | CI/CD |
+
+`phase:gate` runs the same checks as `test:system` and records pass/fail in `.phase-status.json`. Phase N+1 is blocked until Phase N gate passes.
+
+### System test (dry run, no recording)
+
+```bash
+pnpm test:system -- --phase=1
+```
+
+This runs:
+1. `/api/health` — DB + Redis + RLS checks
+2. Unit/integration tests in Docker (`vitest`, incl. RLS)
+3. E2E smoke tests in Docker (`e2e/smoke.spec.ts`)
+
+After changing `Dockerfile.dev`, rebuild once: `docker compose --profile dev build app`
 
 ## Production
 

@@ -1,7 +1,7 @@
 "use server";
 
 import { getTenantDb } from "@/lib/db/get-tenant-db";
-import { prisma } from "@/lib/db/prisma";
+import type { TenantPrisma } from "@/lib/db/prisma";
 import { formatDate } from "@/lib/utils";
 import { cacheGetOrSet } from "@/lib/cache/redis";
 import { cacheKeys, CACHE_TTL } from "@/lib/cache/keys";
@@ -18,7 +18,7 @@ const DEFAULT_LAYOUT = [
 
 type TenantDashboardData = {
   projectHealth: { onTrack: number; atRisk: number; overdue: number };
-  projects: Awaited<ReturnType<typeof prisma.project.findMany>>;
+  projects: Awaited<ReturnType<TenantPrisma["project"]["findMany"]>>;
   milestones: Array<{
     id: string;
     name: string;
@@ -41,27 +41,30 @@ type TenantDashboardData = {
   }>;
 };
 
-async function fetchTenantDashboardData(tenantId: string): Promise<TenantDashboardData> {
+async function fetchTenantDashboardData(
+  db: TenantPrisma,
+  tenantId: string
+): Promise<TenantDashboardData> {
   const [projects, milestones, auditLogs, crmStats, resources] = await Promise.all([
-    prisma.project.findMany({
-      where: { tenantId, deletedAt: null },
+    db.project.findMany({
+      where: { deletedAt: null },
       include: { _count: { select: { tasks: true } } },
     }),
-    prisma.milestone.findMany({
-      where: { tenantId, date: { gte: new Date() } },
+    db.milestone.findMany({
+      where: { date: { gte: new Date() } },
       include: { project: { select: { name: true } } },
       orderBy: { date: "asc" },
       take: 10,
     }),
-    prisma.auditLog.findMany({
-      where: { tenantId },
+    db.auditLog.findMany({
+      where: {},
       include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: "desc" },
       take: 15,
     }),
     fetchCrmPipelineStats(tenantId),
-    prisma.resource.findMany({
-      where: { tenantId },
+    db.resource.findMany({
+      where: {},
       include: {
         assignments: {
           include: { task: { select: { name: true, percentComplete: true } } },
@@ -123,20 +126,18 @@ async function fetchTenantDashboardData(tenantId: string): Promise<TenantDashboa
 }
 
 export async function getDashboardData() {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
 
   const [tenantData, notifications, layout] = await Promise.all([
-    cacheGetOrSet(
-      cacheKeys.tenantDashboard(tenantId),
-      CACHE_TTL.dashboard,
-      () => fetchTenantDashboardData(tenantId)
+    cacheGetOrSet(cacheKeys.tenantDashboard(tenantId), CACHE_TTL.dashboard, () =>
+      fetchTenantDashboardData(db, tenantId)
     ),
-    prisma.notification.findMany({
-      where: { tenantId, userId, read: false },
+    db.notification.findMany({
+      where: { userId, read: false },
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
-    prisma.dashboardLayout.findUnique({
+    db.dashboardLayout.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
     }),
   ]);
@@ -149,9 +150,9 @@ export async function getDashboardData() {
 }
 
 export async function saveDashboardLayout(layout: unknown) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
 
-  await prisma.dashboardLayout.upsert({
+  await db.dashboardLayout.upsert({
     where: { tenantId_userId: { tenantId, userId } },
     create: { tenantId, userId, layout: layout as object },
     update: { layout: layout as object },
@@ -161,32 +162,31 @@ export async function saveDashboardLayout(layout: unknown) {
 }
 
 export async function markNotificationRead(notificationId: string) {
-  const { tenantId, userId } = await getTenantDb();
-  await prisma.notification.update({
-    where: { id: notificationId, tenantId, userId },
+  const { db, tenantId, userId } = await getTenantDb();
+  await db.notification.update({
+    where: { id: notificationId, userId },
     data: { read: true },
   });
   return { success: true };
 }
 
 export async function globalSearch(query: string) {
-  const { tenantId } = await getTenantDb();
+  const { db } = await getTenantDb();
   if (!query || query.length < 2) return { projects: [], accounts: [], contacts: [], tasks: [] };
 
   const [projects, accounts, contacts, tasks] = await Promise.all([
-    prisma.project.findMany({
-      where: { tenantId, deletedAt: null, name: { contains: query, mode: "insensitive" } },
+    db.project.findMany({
+      where: { deletedAt: null, name: { contains: query, mode: "insensitive" } },
       take: 5,
       select: { id: true, name: true },
     }),
-    prisma.crmAccount.findMany({
-      where: { tenantId, deletedAt: null, name: { contains: query, mode: "insensitive" } },
+    db.crmAccount.findMany({
+      where: { deletedAt: null, name: { contains: query, mode: "insensitive" } },
       take: 5,
       select: { id: true, name: true },
     }),
-    prisma.contact.findMany({
+    db.contact.findMany({
       where: {
-        tenantId,
         deletedAt: null,
         OR: [
           { firstName: { contains: query, mode: "insensitive" } },
@@ -196,8 +196,8 @@ export async function globalSearch(query: string) {
       take: 5,
       select: { id: true, firstName: true, lastName: true },
     }),
-    prisma.task.findMany({
-      where: { tenantId, deletedAt: null, name: { contains: query, mode: "insensitive" } },
+    db.task.findMany({
+      where: { deletedAt: null, name: { contains: query, mode: "insensitive" } },
       take: 5,
       select: { id: true, name: true, projectId: true },
     }),

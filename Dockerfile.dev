@@ -1,11 +1,14 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
-RUN apk add --no-cache netcat-openbsd
+RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd socat && rm -rf /var/lib/apt/lists/*
 
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml* package-lock.json* ./
 RUN pnpm install
+
+# Browsers for in-container E2E (optional: pnpm test:e2e inside container)
+RUN pnpm exec playwright install --with-deps chromium
 
 COPY . .
 

@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { getTenantDb } from "@/lib/db/get-tenant-db";
-import { prisma } from "@/lib/db/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { cacheGetOrSet } from "@/lib/cache/redis";
 import { cacheKeys, CACHE_TTL } from "@/lib/cache/keys";
 import { invalidateCrmCache } from "@/lib/cache/invalidate";
 import { fetchCrmStats, fetchPipelineStages } from "@/lib/cache/crm-stats";
+import { checkPlanLimit } from "@/lib/billing/limits";
 import {
   crmAccountSchema,
   contactSchema,
@@ -17,8 +17,8 @@ import {
 } from "@/lib/validations/schemas";
 
 export async function getCrmAccounts() {
-  const { tenantId } = await getTenantDb();
-  return prisma.crmAccount.findMany({
+  const { db, tenantId } = await getTenantDb();
+  return db.crmAccount.findMany({
     where: { tenantId, deletedAt: null },
     include: {
       _count: { select: { contacts: true, opportunities: true, projects: true } },
@@ -28,8 +28,8 @@ export async function getCrmAccounts() {
 }
 
 export async function getCrmAccount(id: string) {
-  const { tenantId } = await getTenantDb();
-  return prisma.crmAccount.findFirst({
+  const { db, tenantId } = await getTenantDb();
+  return db.crmAccount.findFirst({
     where: { id, tenantId, deletedAt: null },
     include: {
       contacts: { where: { deletedAt: null } },
@@ -44,7 +44,7 @@ export async function getCrmAccount(id: string) {
 }
 
 export async function createCrmAccount(formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = crmAccountSchema.safeParse({
     name: formData.get("name"),
     industry: formData.get("industry") || undefined,
@@ -56,7 +56,10 @@ export async function createCrmAccount(formData: FormData) {
 
   if (!parsed.success) return { error: "Invalid account data" };
 
-  const account = await prisma.crmAccount.create({
+  const limitError = await checkPlanLimit(tenantId, "crmAccounts");
+  if (limitError) return { error: limitError };
+
+  const account = await db.crmAccount.create({
     data: { tenantId, ...parsed.data },
   });
 
@@ -75,7 +78,7 @@ export async function createCrmAccount(formData: FormData) {
 }
 
 export async function updateCrmAccount(id: string, formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = crmAccountSchema.safeParse({
     name: formData.get("name"),
     industry: formData.get("industry") || undefined,
@@ -87,7 +90,7 @@ export async function updateCrmAccount(id: string, formData: FormData) {
 
   if (!parsed.success) return { error: "Invalid account data" };
 
-  await prisma.crmAccount.update({
+  await db.crmAccount.update({
     where: { id, tenantId },
     data: parsed.data,
   });
@@ -107,13 +110,13 @@ export async function updateCrmAccount(id: string, formData: FormData) {
 }
 
 export async function deleteCrmAccount(id: string) {
-  const { tenantId, userId } = await getTenantDb();
-  const account = await prisma.crmAccount.findFirst({
+  const { db, tenantId, userId } = await getTenantDb();
+  const account = await db.crmAccount.findFirst({
     where: { id, tenantId, deletedAt: null },
   });
   if (!account) return { error: "Account not found" };
 
-  await prisma.crmAccount.update({
+  await db.crmAccount.update({
     where: { id, tenantId },
     data: { deletedAt: new Date() },
   });
@@ -134,8 +137,8 @@ export async function deleteCrmAccount(id: string) {
 }
 
 export async function getContacts() {
-  const { tenantId } = await getTenantDb();
-  return prisma.contact.findMany({
+  const { db, tenantId } = await getTenantDb();
+  return db.contact.findMany({
     where: { tenantId, deletedAt: null },
     include: { crmAccount: { select: { id: true, name: true } } },
     orderBy: { lastName: "asc" },
@@ -143,7 +146,7 @@ export async function getContacts() {
 }
 
 export async function createContact(formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = contactSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
@@ -155,7 +158,7 @@ export async function createContact(formData: FormData) {
 
   if (!parsed.success) return { error: "Invalid contact data" };
 
-  const contact = await prisma.contact.create({
+  const contact = await db.contact.create({
     data: { tenantId, ...parsed.data },
   });
 
@@ -173,15 +176,15 @@ export async function createContact(formData: FormData) {
 }
 
 export async function getLeads() {
-  const { tenantId } = await getTenantDb();
-  return prisma.lead.findMany({
+  const { db, tenantId } = await getTenantDb();
+  return db.lead.findMany({
     where: { tenantId, deletedAt: null },
     orderBy: { createdAt: "desc" },
   });
 }
 
 export async function createLead(formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = leadSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
@@ -199,7 +202,7 @@ export async function createLead(formData: FormData) {
   if (parsed.data.phone) score += 10;
   if (parsed.data.company) score += 15;
 
-  const lead = await prisma.lead.create({
+  const lead = await db.lead.create({
     data: { tenantId, ...parsed.data, score },
   });
 
@@ -217,8 +220,8 @@ export async function createLead(formData: FormData) {
 }
 
 export async function updateLeadStatus(leadId: string, status: string) {
-  const { tenantId } = await getTenantDb();
-  await prisma.lead.update({
+  const { db, tenantId } = await getTenantDb();
+  await db.lead.update({
     where: { id: leadId, tenantId },
     data: { status: status as "NEW" | "CONTACTED" | "QUALIFIED" | "UNQUALIFIED" | "CONVERTED" },
   });
@@ -228,18 +231,18 @@ export async function updateLeadStatus(leadId: string, status: string) {
 }
 
 export async function convertLeadToOpportunity(leadId: string) {
-  const { tenantId, userId } = await getTenantDb();
-  const lead = await prisma.lead.findFirst({
+  const { db, tenantId, userId } = await getTenantDb();
+  const lead = await db.lead.findFirst({
     where: { id: leadId, tenantId },
   });
   if (!lead) return { error: "Lead not found" };
 
-  const stage = await prisma.pipelineStage.findFirst({
+  const stage = await db.pipelineStage.findFirst({
     where: { tenantId },
     orderBy: { sortOrder: "asc" },
   });
 
-  const opportunity = await prisma.opportunity.create({
+  const opportunity = await db.opportunity.create({
     data: {
       tenantId,
       name: `${lead.firstName} ${lead.lastName} - ${lead.company ?? "Deal"}`,
@@ -249,7 +252,7 @@ export async function convertLeadToOpportunity(leadId: string) {
     },
   });
 
-  await prisma.lead.update({
+  await db.lead.update({
     where: { id: leadId },
     data: { status: "CONVERTED" },
   });
@@ -270,8 +273,8 @@ export async function convertLeadToOpportunity(leadId: string) {
 }
 
 export async function getOpportunities() {
-  const { tenantId } = await getTenantDb();
-  return prisma.opportunity.findMany({
+  const { db, tenantId } = await getTenantDb();
+  return db.opportunity.findMany({
     where: { tenantId, deletedAt: null, status: "OPEN" },
     include: {
       crmAccount: { select: { id: true, name: true } },
@@ -282,7 +285,7 @@ export async function getOpportunities() {
 }
 
 export async function getPipelineStages() {
-  const { tenantId } = await getTenantDb();
+  const { db, tenantId } = await getTenantDb();
   return cacheGetOrSet(
     cacheKeys.tenantPipelineStages(tenantId),
     CACHE_TTL.pipelineStages,
@@ -291,7 +294,7 @@ export async function getPipelineStages() {
 }
 
 export async function createOpportunity(formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = opportunitySchema.safeParse({
     name: formData.get("name"),
     value: formData.get("value") ? Number(formData.get("value")) : undefined,
@@ -303,7 +306,7 @@ export async function createOpportunity(formData: FormData) {
 
   if (!parsed.success) return { error: "Invalid opportunity data" };
 
-  const opportunity = await prisma.opportunity.create({
+  const opportunity = await db.opportunity.create({
     data: {
       tenantId,
       name: parsed.data.name,
@@ -329,8 +332,8 @@ export async function createOpportunity(formData: FormData) {
 }
 
 export async function updateOpportunityStage(opportunityId: string, stageId: string) {
-  const { tenantId, userId } = await getTenantDb();
-  await prisma.opportunity.update({
+  const { db, tenantId, userId } = await getTenantDb();
+  await db.opportunity.update({
     where: { id: opportunityId, tenantId },
     data: { stageId },
   });
@@ -355,8 +358,8 @@ export async function getActivities(filters?: {
   leadId?: string;
   opportunityId?: string;
 }) {
-  const { tenantId } = await getTenantDb();
-  return prisma.activity.findMany({
+  const { db, tenantId } = await getTenantDb();
+  return db.activity.findMany({
     where: { tenantId, ...filters },
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -364,7 +367,7 @@ export async function getActivities(filters?: {
 }
 
 export async function createActivity(formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = activitySchema.safeParse({
     type: formData.get("type"),
     subject: formData.get("subject"),
@@ -378,7 +381,7 @@ export async function createActivity(formData: FormData) {
 
   if (!parsed.success) return { error: "Invalid activity data" };
 
-  const activity = await prisma.activity.create({
+  const activity = await db.activity.create({
     data: {
       tenantId,
       ...parsed.data,
@@ -400,7 +403,7 @@ export async function createActivity(formData: FormData) {
 }
 
 export async function getCrmStats() {
-  const { tenantId } = await getTenantDb();
+  const { db, tenantId } = await getTenantDb();
   return cacheGetOrSet(
     cacheKeys.tenantCrmStats(tenantId),
     CACHE_TTL.crmStats,

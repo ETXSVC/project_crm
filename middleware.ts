@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { authConfig } from "@/lib/auth/auth.config";
 
-const publicPaths = ["/login", "/signup", "/api/auth", "/api/health"];
+const { auth } = NextAuth(authConfig);
+
+const publicPaths = [
+  "/login",
+  "/signup",
+  "/verify-email",
+  "/api/auth",
+  "/api/health",
+  "/api/webhooks/stripe",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,6 +26,14 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (!session.user.activeTenantId && !pathname.startsWith("/onboarding")) {
+    return NextResponse.redirect(new URL("/onboarding", request.url));
+  }
+
+  if (session.user.activeTenantId && pathname.startsWith("/onboarding")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();

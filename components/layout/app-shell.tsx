@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 
@@ -43,9 +44,10 @@ interface AppShellProps {
   children: React.ReactNode;
   user: { name?: string | null; email: string; activeTenantSlug?: string };
   notificationCount?: number;
+  tenants?: Array<{ id: string; name: string; slug: string; isActive: boolean }>;
 }
 
-export function AppShell({ children, user, notificationCount = 0 }: AppShellProps) {
+export function AppShell({ children, user, notificationCount = 0, tenants = [] }: AppShellProps) {
   const pathname = usePathname();
   const [crmOpen, setCrmOpen] = useState(pathname.startsWith("/crm"));
   const [searchOpen, setSearchOpen] = useState(false);
@@ -119,6 +121,10 @@ export function AppShell({ children, user, notificationCount = 0 }: AppShellProp
             );
           })}
         </nav>
+
+        <div className="border-t">
+          <TenantSwitcher tenants={tenants} activeSlug={user.activeTenantSlug} />
+        </div>
 
         <div className="border-t p-4">
           <div className="flex items-center gap-3 rounded-md px-2 py-2">

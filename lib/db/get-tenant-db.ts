@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { createTenantPrisma } from "@/lib/db/prisma";
+import { setTenantContext } from "@/lib/db/tenant-context";
 
 export async function getSession() {
   return auth();
@@ -19,6 +20,9 @@ export async function getTenantDb() {
   if (!tenantId) {
     throw new Error("No active tenant");
   }
+
+  await setTenantContext(tenantId);
+
   return {
     db: createTenantPrisma(tenantId),
     tenantId,

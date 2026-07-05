@@ -1,5 +1,6 @@
 import { PrismaClient, TenantRole, ProjectStatus, LeadStatus, OpportunityStatus, ActivityType, AuditAction } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { setTenantContext } from "../lib/db/tenant-context";
 
 const prisma = new PrismaClient();
 
@@ -26,6 +27,41 @@ async function main() {
       slug: "demo",
     },
   });
+
+  const acmeTenant = await prisma.tenant.upsert({
+    where: { slug: "acme" },
+    update: {},
+    create: {
+      name: "Acme Industries",
+      slug: "acme",
+    },
+  });
+
+  await prisma.tenantMembership.upsert({
+    where: { tenantId_userId: { tenantId: acmeTenant.id, userId: user.id } },
+    update: {},
+    create: {
+      tenantId: acmeTenant.id,
+      userId: user.id,
+      role: TenantRole.ADMIN,
+    },
+  });
+
+  const existingAcmeCalendar = await prisma.projectCalendar.findFirst({
+    where: { tenantId: acmeTenant.id },
+  });
+  if (!existingAcmeCalendar) {
+    await setTenantContext(acmeTenant.id);
+    await prisma.projectCalendar.create({
+      data: {
+        tenantId: acmeTenant.id,
+        name: "Standard",
+        hoursPerDay: 8,
+        workDays: [1, 2, 3, 4, 5],
+        holidays: [],
+      },
+    });
+  }
 
   const existingProject = await prisma.project.findFirst({
     where: { tenantId: tenant.id, name: "Website Redesign" },

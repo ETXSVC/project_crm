@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { getTenantDb } from "@/lib/db/get-tenant-db";
-import { prisma } from "@/lib/db/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { invalidateProjectCache } from "@/lib/cache/invalidate";
+import { checkPlanLimit } from "@/lib/billing/limits";
 import { projectSchema, taskSchema, taskUpdateSchema, dependencySchema, resourceSchema } from "@/lib/validations/schemas";
 import {
   forwardPass,
@@ -15,8 +15,8 @@ import {
 } from "@/lib/scheduling/engine";
 
 export async function getProjects() {
-  const { tenantId } = await getTenantDb();
-  return prisma.project.findMany({
+  const { db, tenantId } = await getTenantDb();
+  return db.project.findMany({
     where: { tenantId, deletedAt: null },
     include: {
       crmAccount: { select: { id: true, name: true } },
@@ -27,8 +27,8 @@ export async function getProjects() {
 }
 
 export async function getProject(projectId: string) {
-  const { tenantId } = await getTenantDb();
-  return prisma.project.findFirst({
+  const { db, tenantId } = await getTenantDb();
+  return db.project.findFirst({
     where: { id: projectId, tenantId, deletedAt: null },
     include: {
       crmAccount: true,
@@ -40,7 +40,7 @@ export async function getProject(projectId: string) {
 }
 
 export async function createProject(formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = projectSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
@@ -52,11 +52,14 @@ export async function createProject(formData: FormData) {
 
   if (!parsed.success) return { error: "Invalid project data" };
 
-  const calendar = await prisma.projectCalendar.findFirst({
+  const limitError = await checkPlanLimit(tenantId, "projects");
+  if (limitError) return { error: limitError };
+
+  const calendar = await db.projectCalendar.findFirst({
     where: { tenantId },
   });
 
-  const project = await prisma.project.create({
+  const project = await db.project.create({
     data: {
       tenantId,
       name: parsed.data.name,
@@ -84,7 +87,7 @@ export async function createProject(formData: FormData) {
 }
 
 export async function updateProject(projectId: string, formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = projectSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
@@ -96,7 +99,7 @@ export async function updateProject(projectId: string, formData: FormData) {
 
   if (!parsed.success) return { error: "Invalid project data" };
 
-  await prisma.project.update({
+  await db.project.update({
     where: { id: projectId, tenantId },
     data: {
       name: parsed.data.name,
@@ -123,8 +126,8 @@ export async function updateProject(projectId: string, formData: FormData) {
 }
 
 export async function deleteProject(projectId: string) {
-  const { tenantId, userId } = await getTenantDb();
-  await prisma.project.update({
+  const { db, tenantId, userId } = await getTenantDb();
+  await db.project.update({
     where: { id: projectId, tenantId },
     data: { deletedAt: new Date() },
   });
@@ -143,8 +146,8 @@ export async function deleteProject(projectId: string) {
 }
 
 export async function getProjectTasks(projectId: string) {
-  const { tenantId } = await getTenantDb();
-  const tasks = await prisma.task.findMany({
+  const { db, tenantId } = await getTenantDb();
+  const tasks = await db.task.findMany({
     where: { projectId, tenantId, deletedAt: null },
     include: {
       assignments: { include: { resource: true } },
@@ -157,14 +160,14 @@ export async function getProjectTasks(projectId: string) {
 }
 
 export async function getProjectDependencies(projectId: string) {
-  const { tenantId } = await getTenantDb();
-  return prisma.taskDependency.findMany({
+  const { db, tenantId } = await getTenantDb();
+  return db.taskDependency.findMany({
     where: { projectId, tenantId },
   });
 }
 
 export async function createTask(projectId: string, formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = taskSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
@@ -180,13 +183,13 @@ export async function createTask(projectId: string, formData: FormData) {
     return { error: parsed.error.errors[0]?.message ?? "Invalid task data" };
   }
 
-  const maxOrder = await prisma.task.aggregate({
+  const maxOrder = await db.task.aggregate({
     where: { projectId, tenantId },
     _max: { sortOrder: true },
   });
 
   try {
-    const task = await prisma.task.create({
+    const task = await db.task.create({
       data: {
         tenantId,
         projectId,
@@ -225,7 +228,7 @@ export async function createTask(projectId: string, formData: FormData) {
 }
 
 export async function updateTask(taskId: string, formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = taskUpdateSchema.safeParse({
     name: formData.get("name") || undefined,
     description: formData.get("description") || undefined,
@@ -241,7 +244,7 @@ export async function updateTask(taskId: string, formData: FormData) {
     return { error: parsed.error.errors[0]?.message ?? "Invalid task data" };
   }
 
-  const existing = await prisma.task.findFirst({
+  const existing = await db.task.findFirst({
     where: { id: taskId, tenantId },
   });
   if (!existing) return { error: "Task not found" };
@@ -255,7 +258,7 @@ export async function updateTask(taskId: string, formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.task.update({
+  await db.task.update({
     where: { id: taskId },
     data: {
       ...(data.name !== undefined ? { name: data.name } : {}),
@@ -296,13 +299,13 @@ export async function updateTaskDates(
   startDate: string,
   endDate: string
 ) {
-  const { tenantId } = await getTenantDb();
-  const task = await prisma.task.findFirst({
+  const { db, tenantId } = await getTenantDb();
+  const task = await db.task.findFirst({
     where: { id: taskId, tenantId },
   });
   if (!task) return { error: "Task not found" };
 
-  await prisma.task.update({
+  await db.task.update({
     where: { id: taskId },
     data: {
       startDate: new Date(startDate),
@@ -320,13 +323,13 @@ export async function updateTaskDates(
 }
 
 export async function deleteTask(taskId: string) {
-  const { tenantId, userId } = await getTenantDb();
-  const task = await prisma.task.findFirst({
+  const { db, tenantId, userId } = await getTenantDb();
+  const task = await db.task.findFirst({
     where: { id: taskId, tenantId },
   });
   if (!task) return { error: "Task not found" };
 
-  await prisma.task.update({
+  await db.task.update({
     where: { id: taskId },
     data: { deletedAt: new Date() },
   });
@@ -349,7 +352,7 @@ export async function deleteTask(taskId: string) {
 }
 
 export async function createDependency(projectId: string, formData: FormData) {
-  const { tenantId } = await getTenantDb();
+  const { db, tenantId } = await getTenantDb();
   const parsed = dependencySchema.safeParse({
     predecessorId: formData.get("predecessorId"),
     successorId: formData.get("successorId"),
@@ -359,7 +362,7 @@ export async function createDependency(projectId: string, formData: FormData) {
 
   if (!parsed.success) return { error: "Invalid dependency data" };
 
-  const existing = await prisma.taskDependency.findMany({
+  const existing = await db.taskDependency.findMany({
     where: { projectId, tenantId },
   });
 
@@ -385,7 +388,7 @@ export async function createDependency(projectId: string, formData: FormData) {
 
   if (wouldCycle) return { error: "This dependency would create a cycle" };
 
-  await prisma.taskDependency.create({
+  await db.taskDependency.create({
     data: {
       tenantId,
       projectId,
@@ -403,13 +406,13 @@ export async function createDependency(projectId: string, formData: FormData) {
 }
 
 export async function deleteDependency(dependencyId: string) {
-  const { tenantId } = await getTenantDb();
-  const dep = await prisma.taskDependency.findFirst({
+  const { db, tenantId } = await getTenantDb();
+  const dep = await db.taskDependency.findFirst({
     where: { id: dependencyId, tenantId },
   });
   if (!dep) return { error: "Dependency not found" };
 
-  await prisma.taskDependency.delete({ where: { id: dependencyId } });
+  await db.taskDependency.delete({ where: { id: dependencyId } });
   await recalculateSchedule(dep.projectId);
   revalidatePath(`/projects/${dep.projectId}`);
   await invalidateProjectCache(tenantId);
@@ -417,18 +420,18 @@ export async function deleteDependency(dependencyId: string) {
 }
 
 export async function recalculateSchedule(projectId: string) {
-  const { tenantId } = await getTenantDb();
+  const { db, tenantId } = await getTenantDb();
 
-  const project = await prisma.project.findFirst({
+  const project = await db.project.findFirst({
     where: { id: projectId, tenantId },
   });
   if (!project) return;
 
-  const tasks = await prisma.task.findMany({
+  const tasks = await db.task.findMany({
     where: { projectId, tenantId, deletedAt: null },
   });
 
-  const dependencies = await prisma.taskDependency.findMany({
+  const dependencies = await db.taskDependency.findMany({
     where: { projectId, tenantId },
   });
 
@@ -466,7 +469,7 @@ export async function recalculateSchedule(projectId: string) {
   }
 
   for (const task of scheduled) {
-    await prisma.task.update({
+    await db.task.update({
       where: { id: task.id },
       data: {
         startDate: task.startDate,
@@ -480,7 +483,7 @@ export async function recalculateSchedule(projectId: string) {
   const ends = scheduled.map((t) => t.endDate).filter(Boolean) as Date[];
   if (ends.length > 0) {
     const projectEnd = new Date(Math.max(...ends.map((d) => d.getTime())));
-    await prisma.project.update({
+    await db.project.update({
       where: { id: projectId },
       data: { endDate: projectEnd },
     });
@@ -488,12 +491,12 @@ export async function recalculateSchedule(projectId: string) {
 }
 
 export async function createBaseline(projectId: string, name: string) {
-  const { tenantId, userId } = await getTenantDb();
-  const tasks = await prisma.task.findMany({
+  const { db, tenantId, userId } = await getTenantDb();
+  const tasks = await db.task.findMany({
     where: { projectId, tenantId, deletedAt: null },
   });
 
-  const baseline = await prisma.baseline.create({
+  const baseline = await db.baseline.create({
     data: {
       tenantId,
       projectId,
@@ -525,8 +528,8 @@ export async function createBaseline(projectId: string, name: string) {
 }
 
 export async function getResources(projectId?: string) {
-  const { tenantId } = await getTenantDb();
-  return prisma.resource.findMany({
+  const { db, tenantId } = await getTenantDb();
+  return db.resource.findMany({
     where: {
       tenantId,
       ...(projectId ? { OR: [{ projectId }, { projectId: null }] } : {}),
@@ -545,7 +548,7 @@ export async function getResources(projectId?: string) {
 }
 
 export async function createResource(formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = resourceSchema.safeParse({
     name: formData.get("name"),
     type: formData.get("type") || undefined,
@@ -559,7 +562,7 @@ export async function createResource(formData: FormData) {
     return { error: parsed.error.errors[0]?.message ?? "Invalid resource data" };
   }
 
-  const resource = await prisma.resource.create({
+  const resource = await db.resource.create({
     data: {
       tenantId,
       projectId: parsed.data.projectId,
@@ -589,7 +592,7 @@ export async function createResource(formData: FormData) {
 }
 
 export async function updateResource(resourceId: string, formData: FormData) {
-  const { tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId } = await getTenantDb();
   const parsed = resourceSchema.safeParse({
     name: formData.get("name"),
     type: formData.get("type") || undefined,
@@ -602,12 +605,12 @@ export async function updateResource(resourceId: string, formData: FormData) {
     return { error: parsed.error.errors[0]?.message ?? "Invalid resource data" };
   }
 
-  const existing = await prisma.resource.findFirst({
+  const existing = await db.resource.findFirst({
     where: { id: resourceId, tenantId },
   });
   if (!existing) return { error: "Resource not found" };
 
-  await prisma.resource.update({
+  await db.resource.update({
     where: { id: resourceId },
     data: {
       name: parsed.data.name,
@@ -635,8 +638,8 @@ export async function updateResource(resourceId: string, formData: FormData) {
 }
 
 export async function deleteResource(resourceId: string) {
-  const { tenantId, userId } = await getTenantDb();
-  const existing = await prisma.resource.findFirst({
+  const { db, tenantId, userId } = await getTenantDb();
+  const existing = await db.resource.findFirst({
     where: { id: resourceId, tenantId },
     include: { _count: { select: { assignments: true } } },
   });
@@ -646,7 +649,7 @@ export async function deleteResource(resourceId: string) {
     return { error: "Remove task assignments before deleting this resource" };
   }
 
-  await prisma.resource.delete({ where: { id: resourceId } });
+  await db.resource.delete({ where: { id: resourceId } });
 
   if (existing.projectId) {
     revalidatePath(`/projects/${existing.projectId}/resources`);
@@ -665,26 +668,26 @@ export async function deleteResource(resourceId: string) {
 }
 
 export async function assignResource(taskId: string, resourceId: string, units = 100) {
-  const { tenantId } = await getTenantDb();
-  await prisma.resourceAssignment.upsert({
+  const { db, tenantId } = await getTenantDb();
+  await db.resourceAssignment.upsert({
     where: { taskId_resourceId: { taskId, resourceId } },
     create: { tenantId, taskId, resourceId, units },
     update: { units },
   });
-  const task = await prisma.task.findFirst({ where: { id: taskId, tenantId } });
+  const task = await db.task.findFirst({ where: { id: taskId, tenantId } });
   if (task) revalidatePath(`/projects/${task.projectId}`);
   await invalidateProjectCache(tenantId);
   return { success: true };
 }
 
 export async function syncResourceAssignments(resourceId: string, taskIds: string[]) {
-  const { tenantId } = await getTenantDb();
-  const resource = await prisma.resource.findFirst({
+  const { db, tenantId } = await getTenantDb();
+  const resource = await db.resource.findFirst({
     where: { id: resourceId, tenantId },
   });
   if (!resource) return { error: "Resource not found" };
 
-  const validTasks = await prisma.task.findMany({
+  const validTasks = await db.task.findMany({
     where: {
       tenantId,
       deletedAt: null,
@@ -695,8 +698,8 @@ export async function syncResourceAssignments(resourceId: string, taskIds: strin
   });
   const validTaskIds = validTasks.map((task) => task.id);
 
-  await prisma.$transaction([
-    prisma.resourceAssignment.deleteMany({
+  await db.$transaction([
+    db.resourceAssignment.deleteMany({
       where: {
         resourceId,
         tenantId,
@@ -704,7 +707,7 @@ export async function syncResourceAssignments(resourceId: string, taskIds: strin
       },
     }),
     ...validTaskIds.map((taskId) =>
-      prisma.resourceAssignment.upsert({
+      db.resourceAssignment.upsert({
         where: { taskId_resourceId: { taskId, resourceId } },
         create: { tenantId, taskId, resourceId, units: 100 },
         update: {},

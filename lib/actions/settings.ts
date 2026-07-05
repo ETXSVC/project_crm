@@ -70,7 +70,7 @@ export async function updateWorkspaceSettings(formData: FormData) {
 }
 
 export async function createPipelineStage(formData: FormData) {
-  const { tenantId, userId, session } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
   requireAdmin(session.user.role);
 
   const parsed = pipelineStageSchema.safeParse({
@@ -82,14 +82,13 @@ export async function createPipelineStage(formData: FormData) {
     return { error: parsed.error.errors[0]?.message ?? "Invalid stage data" };
   }
 
-  const maxOrder = await prisma.pipelineStage.aggregate({
-    where: { tenantId },
+  const maxOrder = await db.pipelineStage.aggregate({
+    where: {},
     _max: { sortOrder: true },
   });
 
-  const stage = await prisma.pipelineStage.create({
+  const stage = await db.pipelineStage.create({
     data: {
-      tenantId,
       name: parsed.data.name,
       probability: parsed.data.probability,
       sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
@@ -111,7 +110,7 @@ export async function createPipelineStage(formData: FormData) {
 }
 
 export async function updatePipelineStage(stageId: string, formData: FormData) {
-  const { tenantId, userId, session } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
   requireAdmin(session.user.role);
 
   const parsed = pipelineStageSchema.safeParse({
@@ -124,8 +123,8 @@ export async function updatePipelineStage(stageId: string, formData: FormData) {
     return { error: parsed.error.errors[0]?.message ?? "Invalid stage data" };
   }
 
-  await prisma.pipelineStage.update({
-    where: { id: stageId, tenantId },
+  await db.pipelineStage.update({
+    where: { id: stageId },
     data: {
       name: parsed.data.name,
       probability: parsed.data.probability,
@@ -148,19 +147,19 @@ export async function updatePipelineStage(stageId: string, formData: FormData) {
 }
 
 export async function deletePipelineStage(stageId: string) {
-  const { tenantId, userId, session } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
   requireAdmin(session.user.role);
 
-  const oppCount = await prisma.opportunity.count({
-    where: { tenantId, stageId, deletedAt: null },
+  const oppCount = await db.opportunity.count({
+    where: { stageId, deletedAt: null },
   });
 
   if (oppCount > 0) {
     return { error: "Cannot delete a stage that has open opportunities" };
   }
 
-  await prisma.pipelineStage.delete({
-    where: { id: stageId, tenantId },
+  await db.pipelineStage.delete({
+    where: { id: stageId },
   });
 
   await createAuditLog({
@@ -178,7 +177,7 @@ export async function deletePipelineStage(stageId: string) {
 }
 
 export async function updateCalendarSettings(calendarId: string, formData: FormData) {
-  const { tenantId, userId, session } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
   requireAdmin(session.user.role);
 
   const workDaysRaw = formData.getAll("workDays").map((v) => Number(v));
@@ -204,8 +203,8 @@ export async function updateCalendarSettings(calendarId: string, formData: FormD
     ?.map((d) => new Date(d))
     .filter((d) => !Number.isNaN(d.getTime())) ?? [];
 
-  await prisma.projectCalendar.update({
-    where: { id: calendarId, tenantId },
+  await db.projectCalendar.update({
+    where: { id: calendarId },
     data: {
       name: parsed.data.name,
       hoursPerDay: parsed.data.hoursPerDay,

@@ -43,12 +43,18 @@ services:
     ports:
       - "3001:3000"
     environment:
-      DATABASE_URL: postgresql://proj:proj@postgres:5432/projtest
+      DATABASE_URL: postgresql://proj_app:proj_app@postgres:5432/projtest
+      MIGRATION_DATABASE_URL: postgresql://proj:proj@postgres:5432/projtest
       REDIS_URL: redis://redis:6379
       AUTH_SECRET: ${AUTH_SECRET:-dev-secret-change-in-production-32chars}
+      AUTH_TRUST_HOST: "true"
       NEXTAUTH_URL: http://localhost:3001
       SMTP_HOST: mailhog
       SMTP_PORT: "1025"
+      SMTP_FROM: noreply@projtest.local
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
       UPLOAD_DIR: /data/uploads
       NODE_ENV: development
       POSTGRES_HOST: postgres
@@ -75,7 +81,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://proj:proj@postgres:5432/projtest
+      DATABASE_URL: postgresql://proj_app:proj_app@postgres:5432/projtest
+      MIGRATION_DATABASE_URL: postgresql://proj:proj@postgres:5432/projtest
       REDIS_URL: redis://redis:6379
       AUTH_SECRET: ${AUTH_SECRET}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}

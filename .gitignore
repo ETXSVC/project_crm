@@ -9,3 +9,5 @@ playwright-report
 test-results
 .turbo
 *.tsbuildinfo
+.pnpm-store
+pnpm-workspace.yaml

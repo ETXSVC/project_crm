@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma";
+import { createTenantPrisma } from "@/lib/db/prisma";
 import type { AuditAction, Prisma } from "@prisma/client";
 
 export async function createAuditLog(params: {
@@ -9,9 +9,9 @@ export async function createAuditLog(params: {
   entityId: string;
   metadata?: Record<string, unknown>;
 }) {
-  return prisma.auditLog.create({
+  const db = createTenantPrisma(params.tenantId);
+  return db.auditLog.create({
     data: {
-      tenantId: params.tenantId,
       userId: params.userId,
       action: params.action,
       entityType: params.entityType,
@@ -29,5 +29,7 @@ export async function createNotification(params: {
   message: string;
   link?: string;
 }) {
-  return prisma.notification.create({ data: params });
+  const db = createTenantPrisma(params.tenantId);
+  const { tenantId: _tenantId, ...data } = params;
+  return db.notification.create({ data });
 }

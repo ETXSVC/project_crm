@@ -13,12 +13,14 @@ test.describe("Auth", () => {
 });
 
 test.describe("Authenticated", () => {
+  test.describe.configure({ mode: "serial" });
+
   test.beforeEach(async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel("Email").fill("demo@example.com");
+    await page.getByRole("textbox", { name: "Email", exact: true }).fill("demo@example.com");
     await page.getByLabel("Password").fill("password");
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL("/dashboard");
+    await page.getByRole("button", { name: "Sign in with password" }).click();
+    await page.waitForURL("**/dashboard");
   });
 
   test("dashboard loads", async ({ page }) => {
@@ -26,7 +28,7 @@ test.describe("Authenticated", () => {
   });
 
   test("projects page loads", async ({ page }) => {
-    await page.goto("/projects");
+    await page.goto("/projects", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
   });
 
