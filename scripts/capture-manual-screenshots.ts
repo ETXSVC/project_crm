@@ -74,21 +74,13 @@ async function main() {
     console.warn("No seeded project link found; skipping project detail screenshots.");
   }
 
-  await page.goto("/crm/accounts", { waitUntil: "domcontentloaded" });
+  await page.goto("/crm", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1000);
-  await capture("08-crm-accounts", page);
-
-  await page.goto("/crm/opportunities", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1000);
-  await capture("09-crm-opportunities", page);
-
-  await page.goto("/crm/leads", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1000);
-  await capture("10-crm-leads", page);
+  await capture("08-crm-vtiger", page);
 
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1000);
-  await capture("11-settings", page);
+  await capture("09-settings", page);
 
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(500);
