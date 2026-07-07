@@ -22,22 +22,39 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus } from "lucide-react";
+import {
+  VtigerLinkFields,
+  appendVtigerLinkFormData,
+  type VtigerAccountOption,
+  type VtigerContactOption,
+} from "@/components/projects/vtiger-link-fields";
 
 interface CreateProjectDialogProps {
   accounts: { id: string; name: string }[];
+  vtigerAccounts?: VtigerAccountOption[];
+  vtigerContacts?: VtigerContactOption[];
 }
 
-export function CreateProjectDialog({ accounts }: CreateProjectDialogProps) {
+export function CreateProjectDialog({
+  accounts,
+  vtigerAccounts = [],
+  vtigerContacts = [],
+}: CreateProjectDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [vtigerAccountId, setVtigerAccountId] = useState("");
+  const [vtigerContactIds, setVtigerContactIds] = useState<string[]>([]);
 
   async function handleSubmit(formData: FormData) {
+    appendVtigerLinkFormData(formData, vtigerAccountId, vtigerContactIds);
     setPending(true);
     const result = await createProject(formData);
     setPending(false);
-    if (result.success && result.projectId) {
+    if (result?.success && result.projectId) {
       setOpen(false);
+      setVtigerAccountId("");
+      setVtigerContactIds([]);
       router.push(`/projects/${result.projectId}`);
     }
   }
@@ -50,7 +67,7 @@ export function CreateProjectDialog({ accounts }: CreateProjectDialogProps) {
           New Project
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Project</DialogTitle>
         </DialogHeader>
@@ -88,7 +105,7 @@ export function CreateProjectDialog({ accounts }: CreateProjectDialogProps) {
           </div>
           {accounts.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="crmAccountId">Linked Account</Label>
+              <Label htmlFor="crmAccountId">Local CRM account</Label>
               <Select name="crmAccountId">
                 <SelectTrigger>
                   <SelectValue placeholder="Select account (optional)" />
@@ -103,6 +120,15 @@ export function CreateProjectDialog({ accounts }: CreateProjectDialogProps) {
               </Select>
             </div>
           )}
+          <VtigerLinkFields
+            vtigerAccounts={vtigerAccounts}
+            vtigerContacts={vtigerContacts}
+            vtigerAccountId={vtigerAccountId}
+            vtigerContactIds={vtigerContactIds}
+            onAccountChange={setVtigerAccountId}
+            onContactsChange={setVtigerContactIds}
+            accountFilterId={vtigerAccountId || null}
+          />
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? "Creating..." : "Create Project"}
           </Button>
