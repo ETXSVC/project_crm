@@ -2,15 +2,18 @@
 
 import { useTransition } from "react";
 import { createBillingPortalSession, createCheckoutSession } from "@/lib/actions/billing";
+import { StripeSetupPanel } from "@/components/settings/stripe-setup-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { BillingSummary } from "@/lib/billing/limits";
+import type { StripeSetupInfo } from "@/lib/billing/stripe-setup";
 import { PLAN_LABELS } from "@/lib/billing/plans";
 
 type BillingSettingsFormProps = {
   billing: BillingSummary;
   canEdit: boolean;
+  stripeSetup: StripeSetupInfo;
 };
 
 function usagePercent(used: number, max: number | null): number {
@@ -18,7 +21,7 @@ function usagePercent(used: number, max: number | null): number {
   return Math.min(100, Math.round((used / max) * 100));
 }
 
-export function BillingSettingsForm({ billing, canEdit }: BillingSettingsFormProps) {
+export function BillingSettingsForm({ billing, canEdit, stripeSetup }: BillingSettingsFormProps) {
   const [pending, startTransition] = useTransition();
 
   function onUpgrade() {
@@ -72,13 +75,9 @@ export function BillingSettingsForm({ billing, canEdit }: BillingSettingsFormPro
           {billing.currentPeriodEnd && (
             <p>Current period ends: {billing.currentPeriodEnd.toLocaleDateString()}</p>
           )}
-          {!billing.stripeConfigured && (
-            <p className="mt-2 text-amber-600">
-              Stripe is not configured. Set STRIPE_SECRET_KEY and STRIPE_PRICE_PRO to enable
-              checkout.
-            </p>
-          )}
         </div>
+
+        <StripeSetupPanel setup={stripeSetup} canEdit={canEdit} />
 
         {canEdit && (
           <div className="flex flex-wrap gap-3">
