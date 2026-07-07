@@ -107,6 +107,10 @@ model Tenant {
   stripeSubscriptionId String? @unique
   stripePriceId        String?
   currentPeriodEnd     DateTime?
+  vtigerBaseUrl        String?
+  vtigerUsername       String?
+  vtigerAccessKey      String?
+  vtigerPublicUrl      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -219,22 +223,39 @@ model Project {
   status      ProjectStatus @default(PLANNING)
   startDate   DateTime?
   endDate     DateTime?
-  crmAccountId String?
-  calendarId  String?
-  deletedAt   DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  crmAccountId    String?
+  vtigerAccountId String?
+  calendarId      String?
+  deletedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  crmAccount CrmAccount?     @relation(fields: [crmAccountId], references: [id])
-  calendar   ProjectCalendar? @relation(fields: [calendarId], references: [id])
-  tasks      Task[]
-  milestones Milestone[]
-  baselines  Baseline[]
-  resources  Resource[]
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  crmAccount      CrmAccount?            @relation(fields: [crmAccountId], references: [id])
+  calendar        ProjectCalendar?       @relation(fields: [calendarId], references: [id])
+  vtigerContacts  ProjectVtigerContact[]
+  tasks           Task[]
+  milestones      Milestone[]
+  baselines       Baseline[]
+  resources       Resource[]
 
   @@index([tenantId, status])
   @@index([tenantId, deletedAt])
+  @@index([tenantId, vtigerAccountId])
+}
+
+model ProjectVtigerContact {
+  id              String   @id @default(cuid())
+  tenantId        String
+  projectId       String
+  vtigerContactId String
+  createdAt       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, projectId, vtigerContactId])
+  @@index([tenantId, projectId])
+  @@index([tenantId, vtigerContactId])
 }
 
 model Task {
