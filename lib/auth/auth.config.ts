@@ -1,5 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
-import { authCallbacks } from "@/lib/auth/callbacks";
+import { edgeAuthCallbacks } from "@/lib/auth/callbacks.edge";
 import { sessionOptions } from "@/lib/auth/session";
 
 /** Edge-safe auth config — no Node-only providers (used by middleware). */
@@ -12,5 +12,5 @@ export const authConfig = {
     verifyRequest: "/verify-email",
   },
   providers: [],
-  callbacks: authCallbacks,
+  callbacks: edgeAuthCallbacks,
 } satisfies NextAuthConfig;
