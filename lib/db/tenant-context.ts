@@ -12,6 +12,10 @@ export async function setTenantContext(tenantId: string): Promise<void> {
   await prisma.$executeRaw`SELECT set_config(${TENANT_SETTING}, ${tenantId}, false)`;
 }
 
+/**
+ * Sets app.user_id on the DB session. Reserved for future audit RLS policies;
+ * no current policy reads this GUC.
+ */
 export async function setUserContext(userId: string): Promise<void> {
   await prisma.$executeRaw`SELECT set_config(${USER_SETTING}, ${userId}, false)`;
 }
