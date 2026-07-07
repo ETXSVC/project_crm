@@ -28,6 +28,24 @@ async function main() {
     },
   });
 
+  const vtigerBaseUrl = process.env.VTIGER_BASE_URL?.trim();
+  const vtigerUsername = process.env.VTIGER_USERNAME?.trim();
+  const vtigerAccessKey = process.env.VTIGER_ACCESS_KEY?.trim();
+  const vtigerPublicUrl = process.env.VTIGER_PUBLIC_URL?.trim();
+
+  if (vtigerBaseUrl && vtigerUsername && vtigerAccessKey) {
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: {
+        vtigerBaseUrl,
+        vtigerUsername,
+        vtigerAccessKey,
+        vtigerPublicUrl: vtigerPublicUrl || null,
+      },
+    });
+    console.log("  Vtiger: seeded demo workspace credentials from env");
+  }
+
   const acmeTenant = await prisma.tenant.upsert({
     where: { slug: "acme" },
     update: {},
