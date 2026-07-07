@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db/prisma";
-import { prisma } from "@/lib/db/prisma";
 import {
   getEnvVtigerConfig,
   getVtigerConfigForTenant,

@@ -24,16 +24,16 @@ test.describe("Authenticated", () => {
   });
 
   test("dashboard loads", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   });
 
   test("projects page loads", async ({ page }) => {
     await page.goto("/projects", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Projects" })).toBeVisible();
   });
 
   test("CRM page loads", async ({ page }) => {
     await page.goto("/crm");
-    await expect(page.getByRole("heading", { name: "CRM" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "CRM" })).toBeVisible();
   });
 });
