@@ -24,7 +24,7 @@ export default function SignupPage() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <FolderKanban className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Create your workspace</CardTitle>
+          <CardTitle className="text-2xl">Create your company</CardTitle>
           <CardDescription>Start managing projects in minutes</CardDescription>
         </CardHeader>
         <CardContent>
@@ -47,11 +47,11 @@ export default function SignupPage() {
               <Input id="password" name="password" type="password" minLength={6} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenantName">Organization name</Label>
+              <Label htmlFor="tenantName">Company name</Label>
               <Input id="tenantName" name="tenantName" required />
             </div>
             <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "Creating..." : "Create workspace"}
+              {pending ? "Creating..." : "Create account"}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">

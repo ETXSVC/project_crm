@@ -46,9 +46,9 @@ export default function OnboardingPage() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <FolderKanban className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Create your workspace</CardTitle>
+          <CardTitle className="text-2xl">Create your company</CardTitle>
           <CardDescription>
-            You&apos;re signed in. Name your workspace to get started.
+            You&apos;re signed in. Name your company to get started.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -59,11 +59,11 @@ export default function OnboardingPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="tenantName">Workspace name</Label>
+              <Label htmlFor="tenantName">Company name</Label>
               <Input id="tenantName" name="tenantName" placeholder="Acme Corp" required />
             </div>
             <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "Creating workspace..." : "Continue to dashboard"}
+              {pending ? "Creating company..." : "Continue to dashboard"}
             </Button>
           </form>
         </CardContent>

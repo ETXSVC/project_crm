@@ -19,6 +19,7 @@ export const projectSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   crmAccountId: z.string().optional(),
+  vtigerAccountId: z.string().optional(),
 });
 
 export const taskSchema = z.object({
