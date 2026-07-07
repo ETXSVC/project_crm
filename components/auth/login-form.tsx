@@ -58,7 +58,7 @@ export function LoginForm({ providers }: LoginFormProps) {
             <FolderKanban className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to your workspace</CardDescription>
+          <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {error && (

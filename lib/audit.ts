@@ -12,6 +12,7 @@ export async function createAuditLog(params: {
   const db = createTenantPrisma(params.tenantId);
   return db.auditLog.create({
     data: {
+      tenantId: params.tenantId,
       userId: params.userId,
       action: params.action,
       entityType: params.entityType,
@@ -30,6 +31,14 @@ export async function createNotification(params: {
   link?: string;
 }) {
   const db = createTenantPrisma(params.tenantId);
-  const { tenantId: _tenantId, ...data } = params;
-  return db.notification.create({ data });
+  return db.notification.create({
+    data: {
+      tenantId: params.tenantId,
+      userId: params.userId,
+      type: params.type,
+      title: params.title,
+      message: params.message,
+      link: params.link,
+    },
+  });
 }

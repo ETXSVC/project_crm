@@ -8,7 +8,7 @@ test.describe("Auth", () => {
 
   test("signup page loads", async ({ page }) => {
     await page.goto("/signup");
-    await expect(page.getByRole("heading", { name: "Create your workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create your company" })).toBeVisible();
   });
 });
 
@@ -32,8 +32,8 @@ test.describe("Authenticated", () => {
     await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
   });
 
-  test("CRM pipeline loads", async ({ page }) => {
-    await page.goto("/crm/opportunities");
-    await expect(page.getByRole("heading", { name: "Opportunities" })).toBeVisible();
+  test("CRM page loads", async ({ page }) => {
+    await page.goto("/crm");
+    await expect(page.getByRole("heading", { name: "CRM" })).toBeVisible();
   });
 });

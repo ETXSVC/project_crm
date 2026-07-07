@@ -58,6 +58,10 @@ export async function magicLinkAction(formData: FormData) {
       email: parsed.data.email,
       redirectTo: "/dashboard",
     });
+    return {
+      success: true as const,
+      message: "Check your email for a sign-in link.",
+    };
   } catch (error) {
     if (isRedirectError(error)) throw error;
     if (error instanceof AuthError) {
@@ -74,15 +78,7 @@ export async function createWorkspaceAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    return { error: "Workspace name must be at least 2 characters" };
-  }
-
-  const existingMembership = await prisma.tenantMembership.findFirst({
-    where: { userId: session.user.id },
-  });
-
-  if (existingMembership) {
-    return { error: "You already belong to a workspace" };
+    return { error: "Company name must be at least 2 characters" };
   }
 
   let slug = slugify(parsed.data.tenantName);

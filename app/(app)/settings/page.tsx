@@ -1,23 +1,46 @@
 import { auth } from "@/lib/auth";
 import { getSettings } from "@/lib/actions/settings";
-import { getBillingInfo } from "@/lib/actions/billing";
+import { getBillingInfo, getStripeSetup } from "@/lib/actions/billing";
+import { getVtigerSetup } from "@/lib/actions/vtiger";
+import { getMembersAndInvites } from "@/lib/actions/members";
 import { WorkspaceSettingsForm } from "@/components/settings/workspace-settings-form";
-import { PipelineStagesForm } from "@/components/settings/pipeline-stages-form";
 import { CalendarSettingsForm } from "@/components/settings/calendar-settings-form";
 import { BillingSettingsForm } from "@/components/settings/billing-settings-form";
+import { CrmSettingsForm } from "@/components/settings/crm-settings-form";
+import { MembersSettingsForm } from "@/components/settings/members-settings-form";
+import {
+  hasPermission,
+  type Permission,
+} from "@/lib/auth/permissions";
+import type { TenantRole } from "@prisma/client";
 
-const ADMIN_ROLES = ["OWNER", "ADMIN"];
+function can(role: TenantRole | undefined, permission: Permission) {
+  return hasPermission(role, permission);
+}
 
 export default async function SettingsPage() {
   const session = await auth();
-  const [tenant, billing] = await Promise.all([getSettings(), getBillingInfo()]);
-  const canEdit = ADMIN_ROLES.includes(session?.user.role ?? "");
+  const role = session?.user.role;
+  const [tenant, billing, stripeSetup, vtigerSetup, membersData] = await Promise.all([
+    getSettings(),
+    getBillingInfo(),
+    getStripeSetup(),
+    getVtigerSetup(),
+    getMembersAndInvites(),
+  ]);
+
+  const canEditWorkspace = can(role, "workspace:manage");
+  const canEditBilling = can(role, "billing:manage");
+  const canEditVtiger = canEditWorkspace || canEditBilling;
+  const canViewMembers = !membersData?.error && can(role, "members:view");
+  const canInvite = can(role, "members:invite");
+  const canManageMembers = can(role, "members:manage");
 
   if (!tenant) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">Workspace not found.</p>
+        <p className="text-muted-foreground">Company not found.</p>
       </div>
     );
   }
@@ -27,8 +50,8 @@ export default async function SettingsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">
-          Manage your workspace configuration
-          {!canEdit && " (read-only — contact an admin to make changes)"}
+          Manage your company configuration
+          {!canEditWorkspace && " (read-only — contact an admin to make changes)"}
         </p>
       </div>
 
@@ -38,14 +61,25 @@ export default async function SettingsPage() {
           slug={tenant.slug}
           logoUrl={tenant.logoUrl}
           memberCount={tenant._count.memberships}
+          plan={tenant.plan}
           role={session?.user.role ?? "—"}
-          canEdit={canEdit}
+          canEdit={canEditWorkspace}
         />
 
-        <PipelineStagesForm
-          stages={tenant.pipelineStages}
-          canEdit={canEdit}
-        />
+        {canViewMembers && membersData && !membersData.error && (
+          <MembersSettingsForm
+            members={membersData.members ?? []}
+            invitations={(membersData.invitations ?? []).map((invite) => ({
+              ...invite,
+              expiresAt: new Date(invite.expiresAt),
+            }))}
+            assignableRoles={membersData.assignableRoles ?? []}
+            canInvite={canInvite}
+            canManage={canManageMembers}
+          />
+        )}
+
+        <CrmSettingsForm vtigerSetup={vtigerSetup} canEdit={canEditVtiger} />
 
         <CalendarSettingsForm
           calendars={tenant.projectCalendars.map((c) => ({
@@ -55,10 +89,16 @@ export default async function SettingsPage() {
             hoursPerDay: c.hoursPerDay,
             holidays: c.holidays,
           }))}
-          canEdit={canEdit}
+          canEdit={canEditWorkspace}
         />
 
-        {billing && <BillingSettingsForm billing={billing} canEdit={canEdit} />}
+        {billing && (
+          <BillingSettingsForm
+            billing={billing}
+            canEdit={canEditBilling}
+            stripeSetup={stripeSetup}
+          />
+        )}
       </div>
     </div>
   );

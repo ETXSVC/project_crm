@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createOpportunity } from "@/lib/actions/crm";
+import { createVtigerOpportunity } from "@/lib/actions/vtiger-crm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +24,7 @@ import { Plus } from "lucide-react";
 
 interface CreateOpportunityDialogProps {
   accounts: { id: string; name: string }[];
-  stages: { id: string; name: string }[];
+  stages: string[];
 }
 
 export function CreateOpportunityDialog({ accounts, stages }: CreateOpportunityDialogProps) {
@@ -34,9 +34,9 @@ export function CreateOpportunityDialog({ accounts, stages }: CreateOpportunityD
 
   async function handleSubmit(formData: FormData) {
     setPending(true);
-    const result = await createOpportunity(formData);
+    const result = await createVtigerOpportunity(formData);
     setPending(false);
-    if (result.success) {
+    if (result?.success) {
       setOpen(false);
       router.refresh();
     }
@@ -66,13 +66,13 @@ export function CreateOpportunityDialog({ accounts, stages }: CreateOpportunityD
           {stages.length > 0 && (
             <div className="space-y-2">
               <Label>Stage</Label>
-              <Select name="stageId" defaultValue={stages[0]?.id}>
+              <Select name="stageId" defaultValue={stages[0]}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {stages.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage} value={stage}>{stage}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

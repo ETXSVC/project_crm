@@ -38,7 +38,7 @@ export async function checkPlanLimit(
   });
 
   if (!tenant) {
-    return "Workspace not found";
+    return "Company not found";
   }
 
   if (tenant.subscriptionStatus === "PAST_DUE") {

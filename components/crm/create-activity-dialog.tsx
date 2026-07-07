@@ -36,7 +36,7 @@ export function CreateActivityDialog({ accounts }: CreateActivityDialogProps) {
     setPending(true);
     const result = await createActivity(formData);
     setPending(false);
-    if (result.success) {
+    if (result?.success) {
       setOpen(false);
       router.refresh();
     }

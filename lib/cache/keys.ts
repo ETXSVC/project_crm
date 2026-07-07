@@ -4,6 +4,12 @@ export const cacheKeys = {
   tenantDashboard: (tenantId: string) => `${PREFIX}:tenant:${tenantId}:dashboard`,
   tenantCrmStats: (tenantId: string) => `${PREFIX}:tenant:${tenantId}:crm:stats`,
   tenantPipelineStages: (tenantId: string) => `${PREFIX}:tenant:${tenantId}:crm:pipeline-stages`,
+  projectTasks: (tenantId: string, projectId: string) =>
+    `${PREFIX}:tenant:${tenantId}:project:${projectId}:tasks`,
+  projectGantt: (tenantId: string, projectId: string) =>
+    `${PREFIX}:tenant:${tenantId}:project:${projectId}:gantt`,
+  projectResources: (tenantId: string, projectId: string) =>
+    `${PREFIX}:tenant:${tenantId}:project:${projectId}:resources`,
 };
 
 export type CacheScope = "dashboard" | "crm" | "pipeline";
@@ -21,4 +27,5 @@ export const CACHE_TTL = {
   dashboard: 60,
   crmStats: 60,
   pipelineStages: 300,
+  projectData: 30,
 } as const;

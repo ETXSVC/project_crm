@@ -9,6 +9,7 @@ const publicPaths = [
   "/login",
   "/signup",
   "/verify-email",
+  "/invite",
   "/api/auth",
   "/api/health",
   "/api/webhooks/stripe",

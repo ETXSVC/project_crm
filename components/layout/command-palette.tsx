@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
-import { Search, FolderKanban, Building2, Users, ListTodo } from "lucide-react";
+import { Search, FolderKanban, ListTodo } from "lucide-react";
 import { globalSearch } from "@/lib/actions/dashboard";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
@@ -17,14 +17,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{
     projects: { id: string; name: string }[];
-    accounts: { id: string; name: string }[];
-    contacts: { id: string; firstName: string; lastName: string }[];
     tasks: { id: string; name: string; projectId: string }[];
-  }>({ projects: [], accounts: [], contacts: [], tasks: [] });
+  }>({ projects: [], tasks: [] });
 
   const search = useCallback(async (q: string) => {
     if (q.length < 2) {
-      setResults({ projects: [], accounts: [], contacts: [], tasks: [] });
+      setResults({ projects: [], tasks: [] });
       return;
     }
     const data = await globalSearch(q);
@@ -53,12 +51,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     router.push(href);
   };
 
-  const hasResults =
-    results.projects.length +
-      results.accounts.length +
-      results.contacts.length +
-      results.tasks.length >
-    0;
+  const hasResults = results.projects.length + results.tasks.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -69,7 +62,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <Command.Input
               value={query}
               onValueChange={setQuery}
-              placeholder="Search projects, accounts, contacts, tasks..."
+              placeholder="Search projects and tasks..."
               className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
@@ -90,36 +83,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                   >
                     <FolderKanban className="h-4 w-4" />
                     {p.name}
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            )}
-
-            {results.accounts.length > 0 && (
-              <Command.Group heading="Accounts">
-                {results.accounts.map((a) => (
-                  <Command.Item
-                    key={a.id}
-                    onSelect={() => navigate(`/crm/accounts/${a.id}`)}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent"
-                  >
-                    <Building2 className="h-4 w-4" />
-                    {a.name}
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            )}
-
-            {results.contacts.length > 0 && (
-              <Command.Group heading="Contacts">
-                {results.contacts.map((c) => (
-                  <Command.Item
-                    key={c.id}
-                    onSelect={() => navigate("/crm/contacts")}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent"
-                  >
-                    <Users className="h-4 w-4" />
-                    {c.firstName} {c.lastName}
                   </Command.Item>
                 ))}
               </Command.Group>
