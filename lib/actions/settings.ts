@@ -5,6 +5,7 @@ import { getTenantDb } from "@/lib/db/get-tenant-db";
 import { prisma } from "@/lib/db/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { invalidateCrmCache } from "@/lib/cache/invalidate";
+import { assertPermission } from "@/lib/auth/guards";
 import {
   workspaceSettingsSchema,
   pipelineStageSchema,
@@ -12,12 +13,9 @@ import {
 } from "@/lib/validations/settings-schemas";
 import type { TenantRole } from "@prisma/client";
 
-const ADMIN_ROLES: TenantRole[] = ["OWNER", "ADMIN"];
-
-function requireAdmin(role?: TenantRole) {
-  if (!role || !ADMIN_ROLES.includes(role)) {
-    throw new Error("You don't have permission to update settings");
-  }
+function requireWorkspaceManage(role?: TenantRole) {
+  const denied = assertPermission(role, "workspace:manage");
+  if (denied) throw new Error(denied);
 }
 
 export async function getSettings() {
@@ -37,21 +35,30 @@ export async function getSettings() {
 
 export async function updateWorkspaceSettings(formData: FormData) {
   const { tenantId, userId, session } = await getTenantDb();
-  requireAdmin(session.user.role);
+  requireWorkspaceManage(session.user.role);
 
   const parsed = workspaceSettingsSchema.safeParse({
     name: formData.get("name"),
+    slug: formData.get("slug"),
     logoUrl: formData.get("logoUrl") || "",
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.errors[0]?.message ?? "Invalid workspace settings" };
+    return { error: parsed.error.errors[0]?.message ?? "Invalid company settings" };
+  }
+
+  const slugTaken = await prisma.tenant.findFirst({
+    where: { slug: parsed.data.slug, id: { not: tenantId } },
+  });
+  if (slugTaken) {
+    return { error: "That company URL slug is already taken" };
   }
 
   await prisma.tenant.update({
     where: { id: tenantId },
     data: {
       name: parsed.data.name,
+      slug: parsed.data.slug,
       logoUrl: parsed.data.logoUrl || null,
     },
   });
@@ -71,7 +78,7 @@ export async function updateWorkspaceSettings(formData: FormData) {
 
 export async function createPipelineStage(formData: FormData) {
   const { db, tenantId, userId, session } = await getTenantDb();
-  requireAdmin(session.user.role);
+  requireWorkspaceManage(session.user.role);
 
   const parsed = pipelineStageSchema.safeParse({
     name: formData.get("name"),
@@ -89,6 +96,7 @@ export async function createPipelineStage(formData: FormData) {
 
   const stage = await db.pipelineStage.create({
     data: {
+      tenantId,
       name: parsed.data.name,
       probability: parsed.data.probability,
       sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
@@ -111,7 +119,7 @@ export async function createPipelineStage(formData: FormData) {
 
 export async function updatePipelineStage(stageId: string, formData: FormData) {
   const { db, tenantId, userId, session } = await getTenantDb();
-  requireAdmin(session.user.role);
+  requireWorkspaceManage(session.user.role);
 
   const parsed = pipelineStageSchema.safeParse({
     name: formData.get("name"),
@@ -148,7 +156,7 @@ export async function updatePipelineStage(stageId: string, formData: FormData) {
 
 export async function deletePipelineStage(stageId: string) {
   const { db, tenantId, userId, session } = await getTenantDb();
-  requireAdmin(session.user.role);
+  requireWorkspaceManage(session.user.role);
 
   const oppCount = await db.opportunity.count({
     where: { stageId, deletedAt: null },
@@ -178,7 +186,7 @@ export async function deletePipelineStage(stageId: string) {
 
 export async function updateCalendarSettings(calendarId: string, formData: FormData) {
   const { db, tenantId, userId, session } = await getTenantDb();
-  requireAdmin(session.user.role);
+  requireWorkspaceManage(session.user.role);
 
   const workDaysRaw = formData.getAll("workDays").map((v) => Number(v));
   const holidaysRaw = formData

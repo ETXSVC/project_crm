@@ -5,20 +5,17 @@ import { getTenantDb } from "@/lib/db/get-tenant-db";
 import { prisma } from "@/lib/db/prisma";
 import { getPlanLimits } from "@/lib/billing/plans";
 import { getTenantUsage, type BillingSummary } from "@/lib/billing/limits";
+import { assertPermission } from "@/lib/auth/guards";
 import {
   getProPriceId,
   getStripeClient,
   isStripeConfigured,
 } from "@/lib/billing/stripe";
+import { getStripeSetupInfo, type StripeSetupInfo } from "@/lib/billing/stripe-setup";
 import type { TenantRole } from "@prisma/client";
 
-const ADMIN_ROLES: TenantRole[] = ["OWNER", "ADMIN"];
-
 function billingAdminError(role?: TenantRole): string | null {
-  if (!role || !ADMIN_ROLES.includes(role)) {
-    return "Only workspace owners and admins can manage billing";
-  }
-  return null;
+  return assertPermission(role, "billing:manage");
 }
 
 export async function getBillingInfo(): Promise<BillingSummary | null> {
@@ -68,7 +65,7 @@ export async function createCheckoutSession() {
   });
 
   if (!tenant) {
-    return { error: "Workspace not found" };
+    return { error: "Company not found" };
   }
 
   let customerId = tenant.stripeCustomerId;
@@ -120,7 +117,7 @@ export async function createBillingPortalSession() {
   });
 
   if (!tenant?.stripeCustomerId) {
-    return { error: "No Stripe customer linked to this workspace" };
+    return { error: "No Stripe customer linked to this company" };
   }
 
   const portal = await stripe.billingPortal.sessions.create({
@@ -129,4 +126,45 @@ export async function createBillingPortalSession() {
   });
 
   redirect(portal.url);
+}
+
+export async function getStripeSetup(): Promise<StripeSetupInfo> {
+  return getStripeSetupInfo();
+}
+
+export async function verifyStripeConnection(): Promise<
+  | { success: true; mode: "test" | "live"; priceLabel?: string }
+  | { error: string }
+> {
+  const { session } = await getTenantDb();
+  const adminError = billingAdminError(session.user.role);
+  if (adminError) return { error: adminError };
+
+  const stripe = getStripeClient();
+  const priceId = getProPriceId();
+
+  if (!stripe) {
+    return { error: "STRIPE_SECRET_KEY is not set. Add it to your .env file and restart the app." };
+  }
+
+  try {
+    await stripe.balance.retrieve();
+
+    let priceLabel: string | undefined;
+    if (priceId) {
+      const price = await stripe.prices.retrieve(priceId, { expand: ["product"] });
+      const product = price.product;
+      const productName =
+        typeof product === "object" && product && "name" in product ? product.name : undefined;
+      priceLabel = productName
+        ? `${productName} (${price.unit_amount ? `$${(price.unit_amount / 100).toFixed(2)}` : priceId})`
+        : priceId;
+    }
+
+    const mode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test";
+    return { success: true, mode, priceLabel };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Stripe error";
+    return { error: `Stripe connection failed: ${message}` };
+  }
 }

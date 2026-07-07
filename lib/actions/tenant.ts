@@ -35,7 +35,7 @@ export async function switchActiveTenant(tenantId: string) {
   });
 
   if (!membership) {
-    return { error: "You are not a member of that workspace" };
+    return { error: "You are not a member of that company" };
   }
 
   if (membership.tenantId === session.user.activeTenantId) {

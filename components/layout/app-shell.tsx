@@ -6,17 +6,14 @@ import {
   LayoutDashboard,
   FolderKanban,
   Users,
-  Building2,
-  UserPlus,
-  Target,
-  Activity,
   Settings,
   Bell,
   Search,
-  ChevronDown,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canViewCrm, canViewProjects } from "@/lib/auth/permissions";
+import type { TenantRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
@@ -26,31 +23,35 @@ import { useState } from "react";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderKanban },
-  {
-    label: "CRM",
-    icon: Users,
-    children: [
-      { href: "/crm/accounts", label: "Accounts", icon: Building2 },
-      { href: "/crm/contacts", label: "Contacts", icon: Users },
-      { href: "/crm/leads", label: "Leads", icon: UserPlus },
-      { href: "/crm/opportunities", label: "Opportunities", icon: Target },
-      { href: "/crm/activities", label: "Activities", icon: Activity },
-    ],
-  },
+  { href: "/crm", label: "CRM", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 interface AppShellProps {
   children: React.ReactNode;
-  user: { name?: string | null; email: string; activeTenantSlug?: string };
+  user: {
+    name?: string | null;
+    email: string;
+    activeTenantSlug?: string;
+    role?: TenantRole;
+  };
   notificationCount?: number;
   tenants?: Array<{ id: string; name: string; slug: string; isActive: boolean }>;
 }
 
+function filterNavItems(role: TenantRole | undefined) {
+  return navItems.filter((item) => {
+    if (item.href === "/projects") return canViewProjects(role);
+    if (item.href === "/crm") return canViewCrm(role);
+    if (item.href === "/settings") return true;
+    return true;
+  });
+}
+
 export function AppShell({ children, user, notificationCount = 0, tenants = [] }: AppShellProps) {
   const pathname = usePathname();
-  const [crmOpen, setCrmOpen] = useState(pathname.startsWith("/crm"));
   const [searchOpen, setSearchOpen] = useState(false);
+  const visibleNavItems = filterNavItems(user.role);
 
   return (
     <div className="flex h-screen bg-background">
@@ -63,47 +64,7 @@ export function AppShell({ children, user, notificationCount = 0, tenants = [] }
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-          {navItems.map((item) => {
-            if (item.children) {
-              const isActive = pathname.startsWith("/crm");
-              return (
-                <div key={item.label}>
-                  <button
-                    onClick={() => setCrmOpen(!crmOpen)}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
-                      isActive && "bg-accent text-accent-foreground"
-                    )}
-                  >
-                    <span className="flex items-center gap-3">
-                      <item.icon className="h-4 w-4" />
-                      {item.label}
-                    </span>
-                    <ChevronDown
-                      className={cn("h-4 w-4 transition-transform", crmOpen && "rotate-180")}
-                    />
-                  </button>
-                  {crmOpen && (
-                    <div className="ml-4 mt-1 space-y-1">
-                      {item.children.map((child) => (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          className={cn(
-                            "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent",
-                            pathname === child.href && "bg-accent font-medium"
-                          )}
-                        >
-                          <child.icon className="h-4 w-4" />
-                          {child.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
+          {visibleNavItems.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
             return (
@@ -134,7 +95,7 @@ export function AppShell({ children, user, notificationCount = 0, tenants = [] }
             <div className="flex-1 truncate">
               <p className="truncate text-sm font-medium">{user.name ?? "User"}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {user.activeTenantSlug ?? "workspace"}
+                {user.activeTenantSlug ?? "company"}
               </p>
             </div>
             <Button

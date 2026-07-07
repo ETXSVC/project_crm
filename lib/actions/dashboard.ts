@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/utils";
 import { cacheGetOrSet } from "@/lib/cache/redis";
 import { cacheKeys, CACHE_TTL } from "@/lib/cache/keys";
 import { fetchCrmPipelineStats } from "@/lib/cache/crm-stats";
+import { assertPermission } from "@/lib/auth/guards";
 
 const DEFAULT_LAYOUT = [
   { i: "project-health", x: 0, y: 0, w: 4, h: 2 },
@@ -30,7 +31,7 @@ type TenantDashboardData = {
     action: string;
     entityType: string;
     createdAtLabel: string;
-    user: { name: string | null; email: string };
+    user: { name: string | null; email: string } | null;
   }>;
   crmStats: Awaited<ReturnType<typeof fetchCrmPipelineStats>>;
   workload: Array<{
@@ -150,7 +151,9 @@ export async function getDashboardData() {
 }
 
 export async function saveDashboardLayout(layout: unknown) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "dashboard:customize");
+  if (denied) return { error: denied };
 
   await db.dashboardLayout.upsert({
     where: { tenantId_userId: { tenantId, userId } },
@@ -172,29 +175,13 @@ export async function markNotificationRead(notificationId: string) {
 
 export async function globalSearch(query: string) {
   const { db } = await getTenantDb();
-  if (!query || query.length < 2) return { projects: [], accounts: [], contacts: [], tasks: [] };
+  if (!query || query.length < 2) return { projects: [], tasks: [] };
 
-  const [projects, accounts, contacts, tasks] = await Promise.all([
+  const [projects, tasks] = await Promise.all([
     db.project.findMany({
       where: { deletedAt: null, name: { contains: query, mode: "insensitive" } },
       take: 5,
       select: { id: true, name: true },
-    }),
-    db.crmAccount.findMany({
-      where: { deletedAt: null, name: { contains: query, mode: "insensitive" } },
-      take: 5,
-      select: { id: true, name: true },
-    }),
-    db.contact.findMany({
-      where: {
-        deletedAt: null,
-        OR: [
-          { firstName: { contains: query, mode: "insensitive" } },
-          { lastName: { contains: query, mode: "insensitive" } },
-        ],
-      },
-      take: 5,
-      select: { id: true, firstName: true, lastName: true },
     }),
     db.task.findMany({
       where: { deletedAt: null, name: { contains: query, mode: "insensitive" } },
@@ -203,5 +190,5 @@ export async function globalSearch(query: string) {
     }),
   ]);
 
-  return { projects, accounts, contacts, tasks };
+  return { projects, tasks };
 }
