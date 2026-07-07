@@ -107,6 +107,9 @@ export function DashboardGrid({ data }: { data: DashboardData }) {
               </div>
             ))}
           </div>
+          <Link href="/crm" className="mt-3 inline-block text-sm text-primary hover:underline">
+            Open Vtiger CRM
+          </Link>
         </CardContent>
       </Card>
     ),
@@ -198,13 +201,13 @@ export function DashboardGrid({ data }: { data: DashboardData }) {
               New Project
             </Button>
           </Link>
-          <Link href="/crm/leads">
+          <Link href="/crm">
             <Button size="sm" variant="outline">
               <Plus className="mr-1 h-4 w-4" />
-              New Lead
+              Open CRM
             </Button>
           </Link>
-          <Link href="/crm/opportunities">
+          <Link href="/crm">
             <Button size="sm" variant="outline">
               <TrendingUp className="mr-1 h-4 w-4" />
               Pipeline

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createLead } from "@/lib/actions/crm";
+import { createVtigerLead } from "@/lib/actions/vtiger-crm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,9 +23,9 @@ export function CreateLeadDialog() {
 
   async function handleSubmit(formData: FormData) {
     setPending(true);
-    const result = await createLead(formData);
+    const result = await createVtigerLead(formData);
     setPending(false);
-    if (result.success) {
+    if (result?.success) {
       setOpen(false);
       router.refresh();
     }

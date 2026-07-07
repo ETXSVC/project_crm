@@ -1,138 +1,240 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getCrmAccount } from "@/lib/actions/crm";
+
+import { notFound } from "next/navigation";
+
+import { auth } from "@/lib/auth";
+
+import { getVtigerSetup } from "@/lib/actions/vtiger";
+
+import { getVtigerAccount } from "@/lib/actions/vtiger-crm";
+
+import { getProjectsByVtigerAccount } from "@/lib/actions/project-vtiger-links";
+
+import { hasPermission } from "@/lib/auth/permissions";
+
+import { CrmProjectLinks } from "@/components/crm/crm-project-links";
+
+import { VtigerSetupPrompt } from "@/components/crm/vtiger-setup-prompt";
+
 import { Badge } from "@/components/ui/badge";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/utils";
+
+
 
 export default async function CrmAccountDetailPage({
+
   params,
+
 }: {
+
   params: Promise<{ id: string }>;
+
 }) {
+
   const { id } = await params;
-  const account = await getCrmAccount(id);
-  if (!account) notFound();
+
+  const session = await auth();
+
+  const setup = await getVtigerSetup();
+
+  const canEditProjects = hasPermission(session?.user.role, "project:edit");
+
+  const canViewProjects = hasPermission(session?.user.role, "project:view");
+
+
+
+  if (!setup.ready) {
+
+    return <VtigerSetupPrompt setup={setup} />;
+
+  }
+
+
+
+  const [result, projectsResult] = await Promise.all([
+
+    getVtigerAccount(id),
+
+    canViewProjects ? getProjectsByVtigerAccount(id) : Promise.resolve({ projects: [] }),
+
+  ]);
+
+
+
+  if ("error" in result) {
+
+    if (result.error === "RECORD_NOT_FOUND" || result.error === "Invalid Vtiger record ID") {
+
+      notFound();
+
+    }
+
+    return <VtigerSetupPrompt setup={setup} message={result.error} />;
+
+  }
+
+
+
+  const { account, contacts } = result;
+
+  const linkedProjects = "projects" in projectsResult ? projectsResult.projects : [];
+
+
 
   return (
+
     <div className="space-y-6">
+
       <div>
-        <Link href="/crm/accounts" className="text-sm text-muted-foreground hover:text-foreground">
-          ← Back to Accounts
+
+        <Link href="/crm/accounts" className="text-sm text-muted-foreground hover:text-primary">
+
+          ← Back to accounts
+
         </Link>
-        <h1 className="mt-2 text-3xl font-bold">{account.name}</h1>
-        {account.industry && <Badge className="mt-2">{account.industry}</Badge>}
+
+        <h2 className="mt-2 text-2xl font-bold">{account.name}</h2>
+
+        {account.industry && (
+
+          <Badge variant="secondary" className="mt-2">
+
+            {account.industry}
+
+          </Badge>
+
+        )}
+
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
+
+
+      <div className="grid gap-4 md:grid-cols-2">
+
+        <Card>
+
           <CardHeader>
-            <CardTitle>Account Details</CardTitle>
+
+            <CardTitle className="text-base">Details</CardTitle>
+
           </CardHeader>
+
           <CardContent className="space-y-2 text-sm">
-            {account.website && <p>Website: {account.website}</p>}
-            {account.phone && <p>Phone: {account.phone}</p>}
-            {account.address && <p>Address: {account.address}</p>}
-            {account.description && <p className="text-muted-foreground">{account.description}</p>}
+
+            <p>
+
+              <span className="text-muted-foreground">Phone:</span> {account.phone ?? "—"}
+
+            </p>
+
+            <p>
+
+              <span className="text-muted-foreground">Website:</span>{" "}
+
+              {account.website ? (
+
+                <a href={account.website} target="_blank" rel="noreferrer" className="hover:underline">
+
+                  {account.website}
+
+                </a>
+
+              ) : (
+
+                "—"
+
+              )}
+
+            </p>
+
+            <p>
+
+              <span className="text-muted-foreground">Address:</span> {account.address ?? "—"}
+
+            </p>
+
+            {account.description && (
+
+              <p className="pt-2 text-muted-foreground">{account.description}</p>
+
+            )}
+
           </CardContent>
+
         </Card>
 
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Contacts ({account.contacts.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {account.contacts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No contacts</p>
-              ) : (
-                <div className="space-y-2">
-                  {account.contacts.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between rounded-md border p-3">
-                      <div>
-                        <p className="font-medium">{c.firstName} {c.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{c.title} · {c.email}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Opportunities ({account.opportunities.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {account.opportunities.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No opportunities</p>
-              ) : (
-                <div className="space-y-2">
-                  {account.opportunities.map((o) => (
-                    <div key={o.id} className="flex items-center justify-between rounded-md border p-3">
-                      <div>
-                        <p className="font-medium">{o.name}</p>
-                        <p className="text-xs text-muted-foreground">{o.stage?.name}</p>
-                      </div>
-                      <span className="font-medium">{formatCurrency(o.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Linked Projects ({account.projects.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {account.projects.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No linked projects</p>
-              ) : (
-                <div className="space-y-2">
-                  {account.projects.map((p) => (
-                    <Link
-                      key={p.id}
-                      href={`/projects/${p.id}`}
-                      className="flex items-center justify-between rounded-md border p-3 hover:bg-accent"
-                    >
-                      <span className="font-medium">{p.name}</span>
-                      <Badge>{p.status.replace("_", " ")}</Badge>
+        <Card>
+
+          <CardHeader>
+
+            <CardTitle className="text-base">Contacts ({contacts.length})</CardTitle>
+
+          </CardHeader>
+
+          <CardContent>
+
+            {contacts.length === 0 ? (
+
+              <p className="text-sm text-muted-foreground">No contacts linked to this account.</p>
+
+            ) : (
+
+              <ul className="space-y-2 text-sm">
+
+                {contacts.map((contact) => (
+
+                  <li key={contact.id}>
+
+                    <Link href={`/crm/contacts/${contact.id}`} className="font-medium hover:underline">
+
+                      {contact.firstName} {contact.lastName}
+
                     </Link>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity Timeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {account.activities.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No activities</p>
-              ) : (
-                <div className="space-y-3">
-                  {account.activities.map((a) => (
-                    <div key={a.id} className="flex gap-3 text-sm">
-                      <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                      <div>
-                        <p className="font-medium">{a.subject}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {a.type} · {formatDate(a.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    {contact.email && (
+
+                      <span className="text-muted-foreground"> · {contact.email}</span>
+
+                    )}
+
+                  </li>
+
+                ))}
+
+              </ul>
+
+            )}
+
+          </CardContent>
+
+        </Card>
+
       </div>
+
+
+
+      {canViewProjects && (
+
+        <CrmProjectLinks
+
+          linkedProjects={linkedProjects}
+
+          canEdit={canEditProjects}
+
+          linkType="account"
+
+          vtigerId={id}
+
+        />
+
+      )}
+
     </div>
+
   );
+
 }
+

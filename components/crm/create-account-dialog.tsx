@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createCrmAccount } from "@/lib/actions/crm";
+import { createVtigerAccount } from "@/lib/actions/vtiger-crm";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Plus } from "lucide-react";
@@ -24,7 +24,7 @@ export function CreateAccountDialog() {
     setPending(true);
     setError(null);
     const formData = new FormData(e.currentTarget);
-    const result = await createCrmAccount(formData);
+    const result = await createVtigerAccount(formData);
     setPending(false);
     if (result.error) {
       setError(result.error);

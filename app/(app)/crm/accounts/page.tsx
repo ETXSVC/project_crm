@@ -1,21 +1,34 @@
-import { getCrmAccounts } from "@/lib/actions/crm";
-import { CreateAccountDialog } from "@/components/crm/create-account-dialog";
+import { auth } from "@/lib/auth";
+import { getVtigerSetup } from "@/lib/actions/vtiger";
+import { getVtigerAccounts } from "@/lib/actions/vtiger-crm";
+import { hasPermission } from "@/lib/auth/permissions";
+import { VtigerSetupPrompt } from "@/components/crm/vtiger-setup-prompt";
 import { AccountList } from "@/components/crm/account-list";
+import { CreateAccountDialog } from "@/components/crm/create-account-dialog";
 
 export default async function CrmAccountsPage() {
-  const accounts = await getCrmAccounts();
+  const session = await auth();
+  const setup = await getVtigerSetup();
+  const canCreate = hasPermission(session?.user.role, "crm:create");
+  const canEdit = hasPermission(session?.user.role, "crm:edit");
+  const canDelete = hasPermission(session?.user.role, "crm:delete");
+
+  if (!setup.ready) {
+    return <VtigerSetupPrompt setup={setup} />;
+  }
+
+  const result = await getVtigerAccounts();
+  if ("error" in result) {
+    return <VtigerSetupPrompt setup={setup} message={result.error} />;
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Accounts</h1>
-          <p className="text-muted-foreground">Manage your customer accounts</p>
-        </div>
-        <CreateAccountDialog />
+        <p className="text-sm text-muted-foreground">{result.accounts.length} accounts</p>
+        {canCreate && <CreateAccountDialog />}
       </div>
-
-      <AccountList accounts={accounts} />
+      <AccountList accounts={result.accounts} canEdit={canEdit} canDelete={canDelete} />
     </div>
   );
 }
