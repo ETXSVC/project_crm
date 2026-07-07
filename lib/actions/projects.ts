@@ -5,6 +5,7 @@ import { getTenantDb } from "@/lib/db/get-tenant-db";
 import { createAuditLog } from "@/lib/audit";
 import { invalidateProjectCache } from "@/lib/cache/invalidate";
 import { checkPlanLimit } from "@/lib/billing/limits";
+import { assertPermission } from "@/lib/auth/guards";
 import { projectSchema, taskSchema, taskUpdateSchema, dependencySchema, resourceSchema } from "@/lib/validations/schemas";
 import {
   forwardPass,
@@ -20,6 +21,7 @@ export async function getProjects() {
     where: { tenantId, deletedAt: null },
     include: {
       crmAccount: { select: { id: true, name: true } },
+      vtigerContacts: { select: { vtigerContactId: true } },
       _count: { select: { tasks: true } },
     },
     orderBy: { updatedAt: "desc" },
@@ -32,15 +34,21 @@ export async function getProject(projectId: string) {
     where: { id: projectId, tenantId, deletedAt: null },
     include: {
       crmAccount: true,
+      vtigerContacts: { select: { vtigerContactId: true } },
       calendar: true,
       milestones: { orderBy: { date: "asc" } },
-      baselines: { orderBy: { createdAt: "desc" } },
+      baselines: {
+        orderBy: { createdAt: "desc" },
+        include: { _count: { select: { tasks: true } } },
+      },
     },
   });
 }
 
 export async function createProject(formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:create");
+  if (denied) return { error: denied };
   const parsed = projectSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
@@ -48,6 +56,7 @@ export async function createProject(formData: FormData) {
     startDate: formData.get("startDate") || undefined,
     endDate: formData.get("endDate") || undefined,
     crmAccountId: formData.get("crmAccountId") || undefined,
+    vtigerAccountId: formData.get("vtigerAccountId") || undefined,
   });
 
   if (!parsed.success) return { error: "Invalid project data" };
@@ -68,9 +77,22 @@ export async function createProject(formData: FormData) {
       startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : undefined,
       endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
       crmAccountId: parsed.data.crmAccountId || undefined,
+      vtigerAccountId: parsed.data.vtigerAccountId || undefined,
       calendarId: calendar?.id,
     },
   });
+
+  const vtigerContactIds = formData.getAll("vtigerContactIds").map(String).filter(Boolean);
+  if (vtigerContactIds.length > 0) {
+    await db.projectVtigerContact.createMany({
+      data: vtigerContactIds.map((vtigerContactId) => ({
+        tenantId,
+        projectId: project.id,
+        vtigerContactId,
+      })),
+      skipDuplicates: true,
+    });
+  }
 
   await createAuditLog({
     tenantId,
@@ -82,12 +104,14 @@ export async function createProject(formData: FormData) {
   });
 
   revalidatePath("/projects");
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, project.id);
   return { success: true, projectId: project.id };
 }
 
 export async function updateProject(projectId: string, formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:edit");
+  if (denied) return { error: denied };
   const parsed = projectSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
@@ -95,6 +119,7 @@ export async function updateProject(projectId: string, formData: FormData) {
     startDate: formData.get("startDate") || undefined,
     endDate: formData.get("endDate") || undefined,
     crmAccountId: formData.get("crmAccountId") || undefined,
+    vtigerAccountId: formData.get("vtigerAccountId") || undefined,
   });
 
   if (!parsed.success) return { error: "Invalid project data" };
@@ -108,8 +133,31 @@ export async function updateProject(projectId: string, formData: FormData) {
       startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : undefined,
       endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
       crmAccountId: parsed.data.crmAccountId || null,
+      vtigerAccountId: parsed.data.vtigerAccountId || null,
     },
   });
+
+  if (formData.has("vtigerContactIds")) {
+    const vtigerContactIds = formData.getAll("vtigerContactIds").map(String).filter(Boolean);
+    await db.$transaction([
+      db.projectVtigerContact.deleteMany({
+        where: {
+          tenantId,
+          projectId,
+          ...(vtigerContactIds.length > 0 ? { vtigerContactId: { notIn: vtigerContactIds } } : {}),
+        },
+      }),
+      ...vtigerContactIds.map((vtigerContactId) =>
+        db.projectVtigerContact.upsert({
+          where: {
+            tenantId_projectId_vtigerContactId: { tenantId, projectId, vtigerContactId },
+          },
+          create: { tenantId, projectId, vtigerContactId },
+          update: {},
+        })
+      ),
+    ]);
+  }
 
   await createAuditLog({
     tenantId,
@@ -120,13 +168,18 @@ export async function updateProject(projectId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/tasks`);
+  revalidatePath(`/projects/${projectId}/gantt`);
+  revalidatePath(`/projects/${projectId}/resources`);
   revalidatePath("/projects");
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, projectId);
   return { success: true };
 }
 
 export async function deleteProject(projectId: string) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:delete");
+  if (denied) return { error: denied };
   await db.project.update({
     where: { id: projectId, tenantId },
     data: { deletedAt: new Date() },
@@ -141,22 +194,29 @@ export async function deleteProject(projectId: string) {
   });
 
   revalidatePath("/projects");
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, projectId);
   return { success: true };
 }
 
 export async function getProjectTasks(projectId: string) {
   const { db, tenantId } = await getTenantDb();
-  const tasks = await db.task.findMany({
+  return db.task.findMany({
     where: { projectId, tenantId, deletedAt: null },
-    include: {
-      assignments: { include: { resource: true } },
-      predecessors: true,
-      successors: true,
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      parentId: true,
+      startDate: true,
+      endDate: true,
+      duration: true,
+      percentComplete: true,
+      isCritical: true,
+      version: true,
+      assignments: { select: { resource: { select: { name: true } } } },
     },
     orderBy: { sortOrder: "asc" },
   });
-  return tasks;
 }
 
 export async function getProjectDependencies(projectId: string) {
@@ -167,7 +227,9 @@ export async function getProjectDependencies(projectId: string) {
 }
 
 export async function createTask(projectId: string, formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:schedule");
+  if (denied) return { error: denied };
   const parsed = taskSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
@@ -219,7 +281,7 @@ export async function createTask(projectId: string, formData: FormData) {
     revalidatePath(`/projects/${projectId}`);
     revalidatePath(`/projects/${projectId}/tasks`);
     revalidatePath(`/projects/${projectId}/gantt`);
-    await invalidateProjectCache(tenantId);
+    await invalidateProjectCache(tenantId, projectId);
     return { success: true, taskId: task.id };
   } catch (e) {
     console.error("createTask error:", e);
@@ -228,7 +290,9 @@ export async function createTask(projectId: string, formData: FormData) {
 }
 
 export async function updateTask(taskId: string, formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:schedule");
+  if (denied) return { error: denied };
   const parsed = taskUpdateSchema.safeParse({
     name: formData.get("name") || undefined,
     description: formData.get("description") || undefined,
@@ -290,7 +354,7 @@ export async function updateTask(taskId: string, formData: FormData) {
   revalidatePath(`/projects/${existing.projectId}`);
   revalidatePath(`/projects/${existing.projectId}/tasks`);
   revalidatePath(`/projects/${existing.projectId}/gantt`);
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, existing.projectId);
   return { success: true };
 }
 
@@ -299,7 +363,9 @@ export async function updateTaskDates(
   startDate: string,
   endDate: string
 ) {
-  const { db, tenantId } = await getTenantDb();
+  const { db, tenantId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:schedule");
+  if (denied) return { error: denied };
   const task = await db.task.findFirst({
     where: { id: taskId, tenantId },
   });
@@ -318,12 +384,14 @@ export async function updateTaskDates(
   revalidatePath(`/projects/${task.projectId}`);
   revalidatePath(`/projects/${task.projectId}/tasks`);
   revalidatePath(`/projects/${task.projectId}/gantt`);
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, task.projectId);
   return { success: true };
 }
 
 export async function deleteTask(taskId: string) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:schedule");
+  if (denied) return { error: denied };
   const task = await db.task.findFirst({
     where: { id: taskId, tenantId },
   });
@@ -347,12 +415,14 @@ export async function deleteTask(taskId: string) {
   revalidatePath(`/projects/${task.projectId}`);
   revalidatePath(`/projects/${task.projectId}/tasks`);
   revalidatePath(`/projects/${task.projectId}/gantt`);
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, task.projectId);
   return { success: true };
 }
 
 export async function createDependency(projectId: string, formData: FormData) {
-  const { db, tenantId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:schedule");
+  if (denied) return { error: denied };
   const parsed = dependencySchema.safeParse({
     predecessorId: formData.get("predecessorId"),
     successorId: formData.get("successorId"),
@@ -401,12 +471,14 @@ export async function createDependency(projectId: string, formData: FormData) {
 
   await recalculateSchedule(projectId);
   revalidatePath(`/projects/${projectId}`);
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, projectId);
   return { success: true };
 }
 
 export async function deleteDependency(dependencyId: string) {
-  const { db, tenantId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:schedule");
+  if (denied) return { error: denied };
   const dep = await db.taskDependency.findFirst({
     where: { id: dependencyId, tenantId },
   });
@@ -415,7 +487,7 @@ export async function deleteDependency(dependencyId: string) {
   await db.taskDependency.delete({ where: { id: dependencyId } });
   await recalculateSchedule(dep.projectId);
   revalidatePath(`/projects/${dep.projectId}`);
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, dep.projectId);
   return { success: true };
 }
 
@@ -491,7 +563,11 @@ export async function recalculateSchedule(projectId: string) {
 }
 
 export async function createBaseline(projectId: string, name: string) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:baseline");
+  if (denied) return { error: denied };
+
+  if (!name.trim()) return { error: "Baseline name is required" };
   const tasks = await db.task.findMany({
     where: { projectId, tenantId, deletedAt: null },
   });
@@ -500,7 +576,7 @@ export async function createBaseline(projectId: string, name: string) {
     data: {
       tenantId,
       projectId,
-      name,
+      name: name.trim(),
       tasks: {
         create: tasks.map((t) => ({
           taskId: t.id,
@@ -523,8 +599,34 @@ export async function createBaseline(projectId: string, name: string) {
   });
 
   revalidatePath(`/projects/${projectId}`);
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, projectId);
   return { success: true, baselineId: baseline.id };
+}
+
+export async function deleteBaseline(projectId: string, baselineId: string) {
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:baseline");
+  if (denied) return { error: denied };
+
+  const baseline = await db.baseline.findFirst({
+    where: { id: baselineId, projectId, tenantId },
+  });
+  if (!baseline) return { error: "Baseline not found" };
+
+  await db.baseline.delete({ where: { id: baselineId } });
+
+  await createAuditLog({
+    tenantId,
+    userId,
+    action: "DELETE",
+    entityType: "Baseline",
+    entityId: baselineId,
+    metadata: { name: baseline.name, projectId },
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  await invalidateProjectCache(tenantId, projectId);
+  return { success: true };
 }
 
 export async function getResources(projectId?: string) {
@@ -548,7 +650,9 @@ export async function getResources(projectId?: string) {
 }
 
 export async function createResource(formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:resources");
+  if (denied) return { error: denied };
   const parsed = resourceSchema.safeParse({
     name: formData.get("name"),
     type: formData.get("type") || undefined,
@@ -587,12 +691,14 @@ export async function createResource(formData: FormData) {
     entityId: resource.id,
   });
 
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, parsed.data.projectId ?? undefined);
   return { success: true, resourceId: resource.id };
 }
 
 export async function updateResource(resourceId: string, formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:resources");
+  if (denied) return { error: denied };
   const parsed = resourceSchema.safeParse({
     name: formData.get("name"),
     type: formData.get("type") || undefined,
@@ -633,12 +739,14 @@ export async function updateResource(resourceId: string, formData: FormData) {
     entityId: resourceId,
   });
 
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, existing.projectId ?? undefined);
   return { success: true };
 }
 
 export async function deleteResource(resourceId: string) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:resources");
+  if (denied) return { error: denied };
   const existing = await db.resource.findFirst({
     where: { id: resourceId, tenantId },
     include: { _count: { select: { assignments: true } } },
@@ -663,12 +771,14 @@ export async function deleteResource(resourceId: string) {
     entityId: resourceId,
   });
 
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, existing.projectId ?? undefined);
   return { success: true };
 }
 
 export async function assignResource(taskId: string, resourceId: string, units = 100) {
-  const { db, tenantId } = await getTenantDb();
+  const { db, tenantId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:resources");
+  if (denied) return { error: denied };
   await db.resourceAssignment.upsert({
     where: { taskId_resourceId: { taskId, resourceId } },
     create: { tenantId, taskId, resourceId, units },
@@ -676,12 +786,14 @@ export async function assignResource(taskId: string, resourceId: string, units =
   });
   const task = await db.task.findFirst({ where: { id: taskId, tenantId } });
   if (task) revalidatePath(`/projects/${task.projectId}`);
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, task?.projectId);
   return { success: true };
 }
 
 export async function syncResourceAssignments(resourceId: string, taskIds: string[]) {
-  const { db, tenantId } = await getTenantDb();
+  const { db, tenantId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "project:resources");
+  if (denied) return { error: denied };
   const resource = await db.resource.findFirst({
     where: { id: resourceId, tenantId },
   });
@@ -720,6 +832,6 @@ export async function syncResourceAssignments(resourceId: string, taskIds: strin
     revalidatePath(`/projects/${resource.projectId}/tasks`);
   }
 
-  await invalidateProjectCache(tenantId);
+  await invalidateProjectCache(tenantId, resource.projectId ?? undefined);
   return { success: true };
 }

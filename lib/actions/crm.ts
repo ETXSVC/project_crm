@@ -8,6 +8,7 @@ import { cacheKeys, CACHE_TTL } from "@/lib/cache/keys";
 import { invalidateCrmCache } from "@/lib/cache/invalidate";
 import { fetchCrmStats, fetchPipelineStages } from "@/lib/cache/crm-stats";
 import { checkPlanLimit } from "@/lib/billing/limits";
+import { assertPermission } from "@/lib/auth/guards";
 import {
   crmAccountSchema,
   contactSchema,
@@ -44,7 +45,9 @@ export async function getCrmAccount(id: string) {
 }
 
 export async function createCrmAccount(formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:create");
+  if (denied) return { error: denied };
   const parsed = crmAccountSchema.safeParse({
     name: formData.get("name"),
     industry: formData.get("industry") || undefined,
@@ -78,7 +81,9 @@ export async function createCrmAccount(formData: FormData) {
 }
 
 export async function updateCrmAccount(id: string, formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:edit");
+  if (denied) return { error: denied };
   const parsed = crmAccountSchema.safeParse({
     name: formData.get("name"),
     industry: formData.get("industry") || undefined,
@@ -110,7 +115,9 @@ export async function updateCrmAccount(id: string, formData: FormData) {
 }
 
 export async function deleteCrmAccount(id: string) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:delete");
+  if (denied) return { error: denied };
   const account = await db.crmAccount.findFirst({
     where: { id, tenantId, deletedAt: null },
   });
@@ -146,7 +153,9 @@ export async function getContacts() {
 }
 
 export async function createContact(formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:create");
+  if (denied) return { error: denied };
   const parsed = contactSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
@@ -184,7 +193,9 @@ export async function getLeads() {
 }
 
 export async function createLead(formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:create");
+  if (denied) return { error: denied };
   const parsed = leadSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
@@ -220,7 +231,9 @@ export async function createLead(formData: FormData) {
 }
 
 export async function updateLeadStatus(leadId: string, status: string) {
-  const { db, tenantId } = await getTenantDb();
+  const { db, tenantId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:edit");
+  if (denied) return { error: denied };
   await db.lead.update({
     where: { id: leadId, tenantId },
     data: { status: status as "NEW" | "CONTACTED" | "QUALIFIED" | "UNQUALIFIED" | "CONVERTED" },
@@ -231,7 +244,9 @@ export async function updateLeadStatus(leadId: string, status: string) {
 }
 
 export async function convertLeadToOpportunity(leadId: string) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:pipeline");
+  if (denied) return { error: denied };
   const lead = await db.lead.findFirst({
     where: { id: leadId, tenantId },
   });
@@ -294,7 +309,9 @@ export async function getPipelineStages() {
 }
 
 export async function createOpportunity(formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:create");
+  if (denied) return { error: denied };
   const parsed = opportunitySchema.safeParse({
     name: formData.get("name"),
     value: formData.get("value") ? Number(formData.get("value")) : undefined,
@@ -332,7 +349,9 @@ export async function createOpportunity(formData: FormData) {
 }
 
 export async function updateOpportunityStage(opportunityId: string, stageId: string) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:pipeline");
+  if (denied) return { error: denied };
   await db.opportunity.update({
     where: { id: opportunityId, tenantId },
     data: { stageId },
@@ -367,7 +386,9 @@ export async function getActivities(filters?: {
 }
 
 export async function createActivity(formData: FormData) {
-  const { db, tenantId, userId } = await getTenantDb();
+  const { db, tenantId, userId, session } = await getTenantDb();
+  const denied = assertPermission(session.user.role, "crm:create");
+  if (denied) return { error: denied };
   const parsed = activitySchema.safeParse({
     type: formData.get("type"),
     subject: formData.get("subject"),
