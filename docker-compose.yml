@@ -35,6 +35,76 @@ services:
     networks:
       - projnet
 
+  vtiger-db:
+    image: mariadb:10.11
+    profiles: ["dev"]
+    environment:
+      MYSQL_DATABASE: vtigercrm
+      MYSQL_ROOT_PASSWORD: vtigercrm
+    volumes:
+      - vtiger_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - projnet
+
+  vtiger:
+    image: javanile/vtiger:7.2.0
+    profiles: ["dev"]
+    ports:
+      - "8080:80"
+    environment:
+      VT_SITE_URL: http://localhost:8080
+      MYSQL_HOST: vtiger-db
+      MYSQL_DATABASE: vtigercrm
+      MYSQL_ROOT_PASSWORD: vtigercrm
+    volumes:
+      - vtiger_data:/var/lib/vtiger
+    depends_on:
+      vtiger-db:
+        condition: service_healthy
+    networks:
+      - projnet
+
+  vtiger-bootstrap:
+    image: mariadb:10.11
+    profiles: ["dev"]
+    depends_on:
+      vtiger-db:
+        condition: service_healthy
+      vtiger:
+        condition: service_started
+    environment:
+      VTIGER_DB_HOST: vtiger-db
+      VTIGER_DB_NAME: vtigercrm
+      VTIGER_DB_USER: root
+      VTIGER_DB_PASS: vtigercrm
+      VTIGER_ACCESS_KEY: ${VTIGER_ACCESS_KEY:-projtest-dev-vtiger-key}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "Waiting for Vtiger database ($$VTIGER_DB_HOST/$$VTIGER_DB_NAME)..."
+        tries=0
+        until mysql -h "$$VTIGER_DB_HOST" -u"$$VTIGER_DB_USER" -p"$$VTIGER_DB_PASS" "$$VTIGER_DB_NAME" -e "SELECT 1 FROM vtiger_users WHERE user_name='admin' LIMIT 1" >/dev/null 2>&1; do
+          tries=$$((tries + 1))
+          if [ "$$tries" -ge 120 ]; then
+            echo "Timed out waiting for Vtiger admin user"
+            exit 1
+          fi
+          sleep 5
+        done
+        echo "Setting dev access key for Vtiger admin user..."
+        mysql -h "$$VTIGER_DB_HOST" -u"$$VTIGER_DB_USER" -p"$$VTIGER_DB_PASS" "$$VTIGER_DB_NAME" -e "UPDATE vtiger_users SET accesskey='$$VTIGER_ACCESS_KEY' WHERE user_name='admin';"
+        echo "Vtiger dev bootstrap complete."
+    networks:
+      - projnet
+    restart: "no"
+
   app:
     build:
       context: .
@@ -55,6 +125,10 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
+      VTIGER_BASE_URL: ${VTIGER_BASE_URL:-http://vtiger}
+      VTIGER_PUBLIC_URL: ${VTIGER_PUBLIC_URL:-http://localhost:8080}
+      VTIGER_USERNAME: ${VTIGER_USERNAME:-admin}
+      VTIGER_ACCESS_KEY: ${VTIGER_ACCESS_KEY:-projtest-dev-vtiger-key}
       UPLOAD_DIR: /data/uploads
       NODE_ENV: development
       POSTGRES_HOST: postgres
@@ -70,6 +144,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      vtiger:
+        condition: service_started
     networks:
       - projnet
 
@@ -86,6 +162,9 @@ services:
       REDIS_URL: redis://redis:6379
       AUTH_SECRET: ${AUTH_SECRET}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      VTIGER_BASE_URL: ${VTIGER_BASE_URL:-}
+      VTIGER_USERNAME: ${VTIGER_USERNAME:-}
+      VTIGER_ACCESS_KEY: ${VTIGER_ACCESS_KEY:-}
       NODE_ENV: production
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
@@ -104,6 +183,8 @@ volumes:
   postgres_data:
   redis_data:
   uploads_data:
+  vtiger_data:
+  vtiger_db_data:
 
 networks:
   projnet:

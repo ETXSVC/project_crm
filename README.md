@@ -42,8 +42,11 @@ The entrypoint waits for Postgres, runs migrations, seeds demo data, and starts 
 |-----|---------|
 | http://localhost:3001 | Application (dev profile — port 3001 on host) |
 | http://localhost:8025 | Mailhog email capture (dev) |
+| http://localhost:8080 | Vtiger CRM web UI (dev — login `admin` / `admin`) |
 
 **Demo credentials:** `demo@example.com` / `password`
+
+Vtiger CRM is included in the dev Docker profile. Settings → CRM should show **connected** after `docker compose --profile dev up`. The app talks to Vtiger at `http://vtiger` inside the network; your browser uses `http://localhost:8080`. First boot can take a few minutes while Vtiger installs — run `docker compose --profile dev logs -f vtiger-bootstrap` to wait for the API access key to be applied.
 
 ---
 
@@ -121,12 +124,8 @@ scripts/             Phase gates, system tests, CI verification, screenshot capt
 | `/projects/[id]/tasks` | WBS task list |
 | `/projects/[id]/gantt` | Interactive Gantt chart |
 | `/projects/[id]/resources` | Resource management |
-| `/crm/accounts` | CRM accounts |
-| `/crm/contacts` | Contacts |
-| `/crm/leads` | Leads |
-| `/crm/opportunities` | Pipeline kanban |
-| `/crm/activities` | Activity log |
-| `/settings` | Workspace, pipeline, calendars, billing |
+| `/crm` | Vtiger CRM (embedded or open in new tab) |
+| `/settings` | Workspace, Vtiger CRM, calendars, billing |
 
 ---
 
@@ -184,6 +183,9 @@ Redis caches dashboard aggregates and CRM pipeline stats. Cache keys are tenant-
 | `postgres` | always | — | PostgreSQL 16 |
 | `redis` | always | — | Redis 7 cache |
 | `mailhog` | dev | 8025 | Email capture |
+| `vtiger` | dev | 8080 | Vtiger CRM 7.2 (open source) |
+| `vtiger-db` | dev | — | MariaDB for Vtiger |
+| `vtiger-bootstrap` | dev | — | One-shot dev access-key setup |
 
 **Entrypoint** (`docker/entrypoint.sh`): wait for Postgres → `prisma generate` → migrate → seed → socat mirror port 3001 → start app.
 
@@ -205,6 +207,9 @@ Copy `.env.example` to `.env`. Key variables:
 | `SMTP_*` | Magic link email (Mailhog in dev) |
 | `AUTH_GOOGLE_*` / `AUTH_GITHUB_*` | Optional OAuth |
 | `STRIPE_*` | Optional billing (checkout + webhooks) |
+| `VTIGER_BASE_URL` | Vtiger API base URL (`http://vtiger` in Docker dev) |
+| `VTIGER_PUBLIC_URL` | Browser CRM URL (`http://localhost:8080` in Docker dev) |
+| `VTIGER_USERNAME` / `VTIGER_ACCESS_KEY` | Vtiger webservice credentials |
 | `UPLOAD_DIR` | File upload directory |
 
 Production: set strong `AUTH_SECRET` and correct `NEXTAUTH_URL` before deploy.
